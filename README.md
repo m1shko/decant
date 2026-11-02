@@ -48,8 +48,8 @@ Head to [**Releases**](https://github.com/m1shko/siphon/releases/latest) and gra
 | System                               | File                            |
 | ------------------------------------ | ------------------------------- |
 | macOS (Apple Silicon: M1, M2, M3…)    | `Siphon-x.y.z-arm64.dmg`        |
-| Windows 10 / 11 (installer)           | `Siphon Setup x.y.z.exe`        |
-| Windows (portable, no install)        | `Siphon x.y.z.exe`              |
+| Windows 10 / 11 (installer)           | `Siphon.Setup.x.y.z.exe`        |
+| Windows (portable, no install)        | `Siphon.x.y.z.exe`              |
 
 Nothing else to install: everything Siphon needs is bundled.
 
