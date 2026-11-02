@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>Siphon</title>
+    <link rel="stylesheet" href="../../src/renderer/styles.css" />
+  </head>
+  <body>
+    <header class="titlebar">
+      <div class="brand">
+        <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+          <path d="M5 6h22l-8.5 11v7.5L13.5 27V17z" />
+        </svg>
+        <span>Siphon</span>
+      </div>
+      <nav class="tabs" role="tablist">
+        <button role="tab" data-tab="download" aria-selected="true">Télécharger</button>
+        <button role="tab" data-tab="history" aria-selected="false">Historique <span id="history-count" class="count"></span></button>
+      </nav>
+    </header>
+
+    <main>
+      <section id="tab-download" class="tab">
+        <form id="url-form" class="search" autocomplete="off">
+          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M10 14a3.5 3.5 0 0 0 5 0l4-4a3.5 3.5 0 0 0-5-5l-.5.5M14 10a3.5 3.5 0 0 0-5 0l-4 4a3.5 3.5 0 0 0 5 5l.5-.5" />
+          </svg>
+          <input
+            id="url-input"
+            type="text"
+            spellcheck="false"
+            placeholder="Colle un lien YouTube, Instagram, TikTok… ou tape une recherche"
+            aria-label="Lien ou recherche"
+          />
+          <button type="submit" class="btn primary" id="analyze-btn">Analyser</button>
+        </form>
+
+        <div id="notice" class="notice" hidden></div>
+        <div id="preview"></div>
+
+        <div class="destination">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+          <span>Enregistré dans</span>
+          <button id="dest-path" class="path" title="Ouvrir le dossier"></button>
+          <button id="dest-change" class="btn small">Changer</button>
+        </div>
+
+        <section class="queue">
+          <div class="section-head">
+            <h2>File d'attente</h2>
+            <button id="queue-clear" class="link" hidden>Effacer les terminés</button>
+          </div>
+          <ul id="queue-list" class="rows"></ul>
+          <p id="queue-empty" class="empty">Rien en cours. Colle un lien pour commencer.</p>
+        </section>
+      </section>
+
+      <section id="tab-history" class="tab" hidden>
+        <div class="section-head">
+          <h2>Historique</h2>
+          <button id="history-clear" class="link">Tout effacer</button>
+        </div>
+        <ul id="history-list" class="rows"></ul>
+        <p id="history-empty" class="empty">Aucun téléchargement pour l'instant.</p>
+      </section>
+    </main>
+
+    <footer class="statusbar">
+      <label class="cookies" title="Pour Instagram, les vidéos privées ou soumises à une limite d'âge : Siphon utilise la session de ce navigateur.">
+        Cookies
+        <select id="cookies-select">
+          <option value="">Aucun</option>
+          <option value="chrome">Chrome</option>
+          <option value="firefox">Firefox</option>
+          <option value="safari" data-platform="darwin">Safari</option>
+          <option value="edge">Edge</option>
+          <option value="brave">Brave</option>
+          <option value="opera">Opera</option>
+          <option value="vivaldi">Vivaldi</option>
+        </select>
+      </label>
+      <span class="spacer"></span>
+      <span id="engine-version" class="muted"></span>
+      <button id="engine-update" class="link">Mettre à jour le moteur</button>
+    </footer>
+
+    <script src="mock.js"></script>
+    <script src="../../src/renderer/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,696 @@
+const api = window.siphon;
+
+const AUDIO_FORMATS = ['mp3', 'm4a', 'wav', 'flac'];
+const MP3_BITRATES = ['320', '192', '128'];
+const ALL_HEIGHTS = [2160, 1440, 1080, 720, 480, 360];
+// Links Siphon fills in by itself when they show up in the clipboard.
+const AUTO_PASTE = /^https?:\/\/([\w-]+\.)*(youtube\.com|youtu\.be|instagram\.com|tiktok\.com|x\.com|twitter\.com|facebook\.com|fb\.watch|vimeo\.com|dailymotion\.com|twitch\.tv|soundcloud\.com)\//i;
+
+const $ = (sel) => document.querySelector(sel);
+const state = {
+  settings: null,
+  info: null,
+  probedInput: null,
+  jobs: new Map(),
+  history: [],
+  lastClipboard: null,
+};
+
+// Builds DOM without innerHTML: titles come from the web.
+function h(tag, attrs = {}, ...children) {
+  const el = document.createElement(tag);
+  for (const [key, value] of Object.entries(attrs)) {
+    if (value == null || value === false) continue;
+    if (key.startsWith('on')) el.addEventListener(key.slice(2), value);
+    else if (key === 'class') el.className = value;
+    else if (value === true) el.setAttribute(key, '');
+    else el.setAttribute(key, value);
+  }
+  for (const child of children.flat()) {
+    if (child == null || child === false) continue;
+    el.append(child instanceof Node ? child : document.createTextNode(String(child)));
+  }
+  return el;
+}
+
+const ICONS = {
+  close: 'M6 6l12 12M18 6L6 18',
+  folder: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+  play: 'M7 5v14l11-7z',
+  retry: 'M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4',
+  trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3',
+  download: 'M12 4v11M7 10l5 5 5-5M5 20h14',
+};
+
+function icon(name) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', ICONS[name]);
+  svg.append(path);
+  return svg;
+}
+
+function iconButton(name, title, onclick) {
+  return h('button', { class: 'icon-btn', title, 'aria-label': title, onclick }, icon(name));
+}
+
+function thumb(src, small = false) {
+  return h('img', {
+    class: small ? 'thumb small' : 'thumb',
+    src: src || null,
+    alt: '',
+    referrerpolicy: 'no-referrer',
+    onerror: (e) => e.target.removeAttribute('src'),
+  });
+}
+
+function formatDuration(seconds) {
+  if (seconds == null) return '';
+  const s = Math.round(seconds);
+  const hh = Math.floor(s / 3600);
+  const mm = Math.floor((s % 3600) / 60);
+  const ss = String(s % 60).padStart(2, '0');
+  return hh ? `${hh}:${String(mm).padStart(2, '0')}:${ss}` : `${mm}:${ss}`;
+}
+
+function parseTime(text) {
+  const parts = String(text).trim().split(':');
+  if (!text || parts.length > 3 || parts.some((p) => !/^\d+(\.\d+)?$/.test(p))) return null;
+  return parts.reduce((t, p) => t * 60 + Number(p), 0);
+}
+
+function formatBytes(n) {
+  if (!n) return '';
+  const units = ['o', 'Ko', 'Mo', 'Go'];
+  let i = 0;
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024;
+    i++;
+  }
+  return `${n.toFixed(n < 10 && i ? 1 : 0).replace('.', ',')} ${units[i]}`;
+}
+
+function formatLabel({ kind, format, quality }) {
+  if (kind === 'audio') return format === 'mp3' ? `MP3 ${quality} kbps` : format.toUpperCase();
+  return `MP4 ${quality === 'best' ? 'max' : `${quality}p`}`;
+}
+
+function sourceName(source) {
+  if (!source) return null;
+  return { Youtube: 'YouTube', YoutubeTab: 'YouTube', TikTok: 'TikTok', Instagram: 'Instagram', Twitter: 'X' }[source] || source;
+}
+
+// --- Notices ---------------------------------------------------------------
+
+function notice(text, type = '') {
+  const el = $('#notice');
+  el.hidden = !text;
+  el.className = `notice ${type}`;
+  el.textContent = text || '';
+}
+
+// --- Probing a link or a search -------------------------------------------
+
+function normalizeInput(raw) {
+  const text = raw.trim();
+  if (/^https?:\/\//i.test(text)) return { input: text, search: false };
+  if (/^([\w-]+\.)+[a-z]{2,}\/\S*$/i.test(text)) return { input: `https://${text}`, search: false };
+  return { input: text, search: true };
+}
+
+let probeToken = 0;
+
+async function analyze(raw, { playlist = false } = {}) {
+  const { input, search } = normalizeInput(raw);
+  if (!input) return;
+  const token = ++probeToken;
+  state.info = null;
+  state.probedInput = input;
+  $('#preview').replaceChildren();
+  $('#analyze-btn').disabled = true;
+  notice(search ? `Recherche de « ${input} »…` : 'Analyse du lien…', 'loading');
+  try {
+    const info = await api.probe(input, { playlist, search });
+    if (token !== probeToken) return;
+    notice('');
+    state.info = { ...info, isSearch: search, canExpand: info.type === 'video' && !playlist && /[?&]list=/.test(input) };
+    // A new preview starts with no trim and every playlist entry selected.
+    state.trim = { enabled: false, start: '', end: '' };
+    state.selected = new Set(info.type === 'playlist' ? info.entries.map((_, i) => i) : []);
+    renderPreview();
+  } catch (err) {
+    if (token !== probeToken) return;
+    notice(cleanError(err), 'error');
+  } finally {
+    if (token === probeToken) $('#analyze-btn').disabled = false;
+  }
+}
+
+function cleanError(err) {
+  return String(err?.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+}
+
+// --- Preview ----------------------------------------------------------------
+
+function settingsFor(info) {
+  const s = state.settings;
+  const kind = info.type === 'video' && !info.hasVideo ? 'audio' : s.kind;
+  return { kind, audioFormat: s.audioFormat, audioQuality: s.audioQuality, videoQuality: s.videoQuality };
+}
+
+function saveSetting(patch) {
+  Object.assign(state.settings, patch);
+  api.settings.set(patch);
+  renderPreview();
+}
+
+function segmented(options, current, onPick) {
+  return h(
+    'div',
+    { class: 'segmented' },
+    options.map(([value, label, disabled]) =>
+      h('button', { 'aria-pressed': String(value === current), disabled, onclick: () => onPick(value) }, label),
+    ),
+  );
+}
+
+function renderOptions(info, opts) {
+  const rows = [];
+  rows.push(
+    h('span', { class: 'label' }, 'Type'),
+    segmented(
+      [
+        ['audio', 'Audio'],
+        ['video', 'Vidéo', info.type === 'video' && !info.hasVideo],
+      ],
+      opts.kind,
+      (kind) => saveSetting({ kind }),
+    ),
+  );
+
+  if (opts.kind === 'audio') {
+    rows.push(
+      h('span', { class: 'label' }, 'Format'),
+      segmented(
+        AUDIO_FORMATS.map((f) => [f, f.toUpperCase()]),
+        opts.audioFormat,
+        (audioFormat) => saveSetting({ audioFormat }),
+      ),
+      h('span', { class: 'label' }, 'Qualité'),
+    );
+    if (opts.audioFormat === 'mp3') {
+      rows.push(
+        segmented(
+          MP3_BITRATES.map((b) => [b, `${b} kbps`]),
+          opts.audioQuality,
+          (audioQuality) => saveSetting({ audioQuality }),
+        ),
+      );
+    } else {
+      const hints = {
+        m4a: "Son d'origine (AAC), sans réencodage.",
+        wav: 'Sans perte, non compressé (fichier lourd, pas de pochette).',
+        flac: 'Sans perte, compressé.',
+      };
+      rows.push(h('span', { class: 'hint' }, hints[opts.audioFormat]));
+    }
+  } else {
+    const heights = info.type === 'video' ? info.heights : ALL_HEIGHTS;
+    const quality = opts.videoQuality === 'best' || heights.includes(Number(opts.videoQuality)) ? opts.videoQuality : 'best';
+    rows.push(
+      h('span', { class: 'label' }, 'Format'),
+      segmented([['mp4', 'MP4']], 'mp4', () => {}),
+      h('span', { class: 'label' }, 'Qualité'),
+      h(
+        'div',
+        {},
+        segmented(
+          [['best', 'Maximale'], ...heights.map((x) => [String(x), x >= 2160 ? '4K' : x === 1440 ? '2K' : `${x}p`])],
+          quality,
+          (videoQuality) => saveSetting({ videoQuality }),
+        ),
+        Number(quality) > 1080 || (quality === 'best' && Math.max(...heights) > 1080)
+          ? h('div', { class: 'hint' }, 'Au-delà de 1080p, la vidéo est en VP9/AV1 : lisible avec VLC ou IINA, et QuickTime sur les Mac récents.')
+          : null,
+      ),
+    );
+    opts.videoQuality = quality;
+  }
+
+  if (info.type === 'video' && info.duration) rows.push(h('span', { class: 'label' }, 'Durée'), renderTrim(info));
+  return h('div', { class: 'options' }, rows);
+}
+
+function renderTrim(info) {
+  const trim = state.trim;
+  const toggle = h('input', {
+    type: 'checkbox',
+    checked: trim.enabled,
+    onchange: (e) => {
+      trim.enabled = e.target.checked;
+      renderPreview();
+    },
+  });
+  const field = (key, placeholder) =>
+    h('input', {
+      type: 'text',
+      value: trim[key],
+      placeholder,
+      'aria-label': key === 'start' ? 'Début' : 'Fin',
+      class: trim[key] && parseTime(trim[key]) == null ? 'invalid' : null,
+      oninput: (e) => {
+        trim[key] = e.target.value;
+        e.target.classList.toggle('invalid', Boolean(e.target.value) && parseTime(e.target.value) == null);
+        updateDownloadButton();
+      },
+    });
+  return h(
+    'div',
+    { class: 'trim' },
+    h('label', { class: 'toggle' }, toggle, 'Extrait seulement'),
+    trim.enabled ? [h('span', { class: 'hint' }, 'de'), field('start', '0:00'), h('span', { class: 'hint' }, 'à'), field('end', formatDuration(info.duration))] : null,
+  );
+}
+
+function trimValue() {
+  const trim = state.trim;
+  if (!trim.enabled) return null;
+  const start = parseTime(trim.start || '0');
+  const end = trim.end ? parseTime(trim.end) : null;
+  if (start == null || (trim.end && end == null) || (end != null && end <= start)) return undefined;
+  return { start: String(start), end: end == null ? null : String(end) };
+}
+
+function jobOptions(info) {
+  const opts = settingsFor(info);
+  if (opts.kind === 'audio') {
+    return { kind: 'audio', format: opts.audioFormat, quality: opts.audioFormat === 'mp3' ? opts.audioQuality : null };
+  }
+  const heights = info.type === 'video' ? info.heights : ALL_HEIGHTS;
+  const quality = opts.videoQuality === 'best' || heights.includes(Number(opts.videoQuality)) ? opts.videoQuality : 'best';
+  return { kind: 'video', format: 'mp4', quality };
+}
+
+function updateDownloadButton() {
+  const btn = $('#download-btn');
+  if (!btn) return;
+  const info = state.info;
+  if (info.type === 'video') {
+    const trim = trimValue();
+    btn.disabled = trim === undefined;
+    btn.lastChild.textContent = `Télécharger · ${formatLabel(jobOptions(info))}`;
+  } else {
+    const count = state.selected.size;
+    btn.disabled = count === 0;
+    btn.lastChild.textContent = `Ajouter ${count} élément${count > 1 ? 's' : ''} · ${formatLabel(jobOptions(info))}`;
+  }
+}
+
+function renderPreview() {
+  const info = state.info;
+  const root = $('#preview');
+  if (!info) return root.replaceChildren();
+  if (info.isSearch) return root.replaceChildren(renderSearch(info));
+
+  const opts = settingsFor(info);
+  const isPlaylist = info.type === 'playlist';
+  const meta = isPlaylist
+    ? [`${info.entries.length} élément${info.entries.length > 1 ? 's' : ''}`, info.uploader].filter(Boolean).join(' · ')
+    : [info.uploader, formatDuration(info.duration)].filter(Boolean).join(' · ');
+
+  const card = h(
+    'div',
+    { class: 'card' },
+    h(
+      'div',
+      { class: 'media' },
+      thumb(isPlaylist ? info.entries[0]?.thumbnail : info.thumbnail),
+      h(
+        'div',
+        { class: 'media-text' },
+        sourceName(info.source) ? h('span', { class: 'chip-source' }, isPlaylist ? `Playlist ${sourceName(info.source)}` : sourceName(info.source)) : null,
+        h('div', { class: 'media-title', title: info.title }, info.title),
+        h('div', { class: 'muted' }, meta),
+        info.canExpand
+          ? h('button', { class: 'link', onclick: () => analyze(state.probedInput, { playlist: true }) }, 'Ce lien fait partie d’une playlist : tout afficher')
+          : null,
+      ),
+    ),
+    isPlaylist ? renderEntries(info) : null,
+    renderOptions(info, opts),
+    h(
+      'div',
+      { class: 'card-actions' },
+      h('button', { class: 'btn large primary', id: 'download-btn', onclick: enqueue }, icon('download'), h('span', {}, '')),
+    ),
+  );
+  root.replaceChildren(card);
+  updateDownloadButton();
+}
+
+function renderEntries(info) {
+  const all = h('input', {
+    type: 'checkbox',
+    checked: state.selected.size === info.entries.length,
+    onchange: (e) => {
+      state.selected = new Set(e.target.checked ? info.entries.map((_, i) => i) : []);
+      renderPreview();
+    },
+  });
+  return h(
+    'div',
+    {},
+    h('label', { class: 'toggle' }, all, 'Tout sélectionner'),
+    h(
+      'ul',
+      { class: 'entries' },
+      info.entries.map((entry, i) =>
+        h(
+          'li',
+          {},
+          h('input', {
+            type: 'checkbox',
+            checked: state.selected.has(i),
+            onchange: (e) => {
+              if (e.target.checked) state.selected.add(i);
+              else state.selected.delete(i);
+              all.checked = state.selected.size === info.entries.length;
+              updateDownloadButton();
+            },
+          }),
+          h('span', { class: 'title', title: entry.title }, entry.title),
+          h('span', { class: 'muted' }, formatDuration(entry.duration)),
+        ),
+      ),
+    ),
+  );
+}
+
+function renderSearch(info) {
+  return h(
+    'div',
+    { class: 'card' },
+    h('div', { class: 'muted' }, `Résultats YouTube pour « ${state.probedInput} »`),
+    h(
+      'ul',
+      { class: 'entries clickable' },
+      info.entries.map((entry) =>
+        h(
+          'li',
+          {
+            onclick: () => {
+              $('#url-input').value = entry.url;
+              analyze(entry.url);
+            },
+          },
+          thumb(entry.thumbnail, true),
+          h('span', { class: 'title', title: entry.title }, entry.title),
+          h('span', { class: 'muted' }, [entry.uploader, formatDuration(entry.duration)].filter(Boolean).join(' · ')),
+        ),
+      ),
+    ),
+  );
+}
+
+async function enqueue() {
+  const info = state.info;
+  const opts = jobOptions(info);
+  let specs;
+  if (info.type === 'video') {
+    const trim = trimValue();
+    if (trim === undefined) return;
+    specs = [{ ...opts, url: info.url || state.probedInput, title: info.title, thumbnail: info.thumbnail, trim }];
+  } else {
+    specs = info.entries
+      .filter((_, i) => state.selected.has(i))
+      .map((e) => ({ ...opts, url: e.url, title: e.title, thumbnail: e.thumbnail, trim: null }));
+  }
+  await api.queue.add(specs);
+  state.info = null;
+  $('#url-input').value = '';
+  renderPreview();
+  notice(specs.length > 1 ? `${specs.length} éléments ajoutés à la file d'attente.` : '');
+  $('#url-input').focus();
+}
+
+// --- Queue ------------------------------------------------------------------
+
+function jobStatus(job) {
+  switch (job.status) {
+    case 'queued':
+      return 'En attente';
+    case 'downloading': {
+      const parts = [`${Math.floor(job.percent || 0)} %`];
+      if (job.speed) parts.push(`${formatBytes(job.speed)}/s`);
+      if (job.eta != null) parts.push(`${formatDuration(job.eta)} restantes`);
+      return parts.join(' · ');
+    }
+    case 'processing':
+      return job.kind === 'audio' ? 'Conversion…' : 'Finalisation…';
+    case 'done':
+      return 'Terminé';
+    case 'canceled':
+      return 'Annulé';
+    case 'error':
+      return job.error || 'Erreur';
+    default:
+      return '';
+  }
+}
+
+function renderJob(job) {
+  const active = ['queued', 'downloading', 'processing'].includes(job.status);
+  const actions = [];
+  if (job.status === 'done') {
+    actions.push(iconButton('play', 'Ouvrir', () => api.file.open(job.filePath)));
+    actions.push(iconButton('folder', 'Afficher dans le dossier', () => api.file.reveal(job.filePath)));
+  }
+  if (['error', 'canceled'].includes(job.status)) actions.push(iconButton('retry', 'Réessayer', () => api.queue.retry(job.id)));
+  actions.push(
+    active
+      ? iconButton('close', 'Annuler', () => api.queue.cancel(job.id))
+      : iconButton('close', 'Retirer de la liste', () => api.queue.remove(job.id)),
+  );
+
+  return h(
+    'li',
+    { class: `row ${job.status}`, 'data-id': job.id },
+    thumb(job.thumbnail, true),
+    h(
+      'div',
+      { class: 'row-main' },
+      h('div', { class: 'row-title', title: job.title }, job.title),
+      h(
+        'div',
+        { class: 'row-sub' },
+        h('span', { class: 'tag' }, formatLabel(job)),
+        job.trim ? h('span', {}, `${formatDuration(Number(job.trim.start))} → ${job.trim.end ? formatDuration(Number(job.trim.end)) : 'fin'}`) : null,
+        h('span', { class: 'status' }, jobStatus(job)),
+      ),
+      active ? h('div', { class: 'progress' }, h('div', { style: `width: ${job.percent || 0}%` })) : null,
+    ),
+    h('div', { class: 'row-actions' }, actions),
+  );
+}
+
+function renderQueue() {
+  const list = $('#queue-list');
+  const jobs = [...state.jobs.values()];
+  list.replaceChildren(...jobs.map(renderJob));
+  $('#queue-empty').hidden = jobs.length > 0;
+  $('#queue-clear').hidden = !jobs.some((j) => ['done', 'error', 'canceled'].includes(j.status));
+}
+
+// Progress events arrive many times a second: patch the row in place.
+function updateJob(job) {
+  const had = state.jobs.has(job.id);
+  state.jobs.set(job.id, job);
+  const row = document.querySelector(`.row[data-id="${job.id}"]`);
+  if (had && row && row.classList.contains(job.status)) {
+    row.querySelector('.status').textContent = jobStatus(job);
+    const bar = row.querySelector('.progress > div');
+    if (bar) bar.style.width = `${job.percent || 0}%`;
+    return;
+  }
+  if (had && row) row.replaceWith(renderJob(job));
+  else renderQueue();
+  $('#queue-clear').hidden = ![...state.jobs.values()].some((j) => ['done', 'error', 'canceled'].includes(j.status));
+}
+
+// --- History ----------------------------------------------------------------
+
+async function renderHistory() {
+  const items = state.history;
+  $('#history-count').textContent = items.length ? items.length : '';
+  $('#history-empty').hidden = items.length > 0;
+  const exists = await Promise.all(items.map((i) => api.file.exists(i.filePath)));
+  const dateFmt = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+  $('#history-list').replaceChildren(
+    ...items.map((item, i) =>
+      h(
+        'li',
+        { class: `row${exists[i] ? '' : ' missing'}` },
+        thumb(item.thumbnail, true),
+        h(
+          'div',
+          { class: 'row-main' },
+          h('div', { class: 'row-title', title: item.title }, item.title),
+          h(
+            'div',
+            { class: 'row-sub' },
+            h('span', { class: 'tag' }, formatLabel(item)),
+            h('span', {}, dateFmt.format(item.date)),
+            exists[i] ? null : h('span', {}, 'Fichier déplacé ou supprimé'),
+          ),
+        ),
+        h(
+          'div',
+          { class: 'row-actions' },
+          exists[i] ? iconButton('play', 'Ouvrir', () => api.file.open(item.filePath)) : null,
+          exists[i] ? iconButton('folder', 'Afficher dans le dossier', () => api.file.reveal(item.filePath)) : null,
+          iconButton('retry', 'Télécharger à nouveau', () => {
+            selectTab('download');
+            $('#url-input').value = item.url;
+            analyze(item.url);
+          }),
+          iconButton('trash', "Retirer de l'historique", async () => {
+            state.history = await api.history.remove(item.id);
+            renderHistory();
+          }),
+        ),
+      ),
+    ),
+  );
+}
+
+// --- Tabs, destination, footer ----------------------------------------------
+
+function selectTab(name) {
+  for (const btn of document.querySelectorAll('.tabs button')) btn.setAttribute('aria-selected', String(btn.dataset.tab === name));
+  $('#tab-download').hidden = name !== 'download';
+  $('#tab-history').hidden = name !== 'history';
+  if (name === 'history') renderHistory();
+}
+
+function renderDestination() {
+  const dir = state.settings.outputDir;
+  const btn = $('#dest-path');
+  // The button is right-to-left so long paths cut on the left; the LRM marks
+  // keep the slashes where they belong.
+  btn.textContent = `‎${dir}‎`;
+  btn.title = `${dir}\nCliquer pour ouvrir le dossier`;
+}
+
+async function pasteFromClipboard() {
+  const text = (await api.readClipboard()).trim();
+  if (!text || text === state.lastClipboard || !AUTO_PASTE.test(text)) return;
+  state.lastClipboard = text;
+  const input = $('#url-input');
+  if (input.value.trim() === text || state.probedInput === text) return;
+  if (input.value.trim() && document.activeElement === input) return;
+  selectTab('download');
+  input.value = text;
+  analyze(text);
+}
+
+async function init() {
+  if (api.platform === 'darwin') document.body.classList.add('mac');
+  else for (const opt of document.querySelectorAll('[data-platform="darwin"]')) opt.remove();
+
+  state.settings = await api.settings.get();
+  state.trim = { enabled: false, start: '', end: '' };
+  renderDestination();
+
+  for (const job of await api.queue.list()) state.jobs.set(job.id, job);
+  renderQueue();
+  api.queue.onUpdate(updateJob);
+  api.queue.onRemoved((id) => {
+    state.jobs.delete(id);
+    renderQueue();
+  });
+
+  state.history = await api.history.list();
+  renderHistory();
+  api.history.onUpdate((items) => {
+    state.history = items;
+    renderHistory();
+  });
+
+  $('#url-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    analyze($('#url-input').value);
+  });
+  $('#url-input').addEventListener('paste', () => setTimeout(() => {
+    const value = $('#url-input').value.trim();
+    if (/^https?:\/\//i.test(value)) {
+      state.lastClipboard = value;
+      analyze(value);
+    }
+  }));
+
+  for (const btn of document.querySelectorAll('.tabs button')) btn.addEventListener('click', () => selectTab(btn.dataset.tab));
+
+  $('#dest-path').addEventListener('click', () => api.folder.open());
+  $('#dest-change').addEventListener('click', async () => {
+    const dir = await api.folder.choose();
+    if (dir) {
+      state.settings.outputDir = dir;
+      renderDestination();
+    }
+  });
+
+  $('#queue-clear').addEventListener('click', () => api.queue.clear());
+  $('#history-clear').addEventListener('click', async () => {
+    if (!confirm("Effacer tout l'historique ? Les fichiers ne seront pas supprimés.")) return;
+    state.history = await api.history.clear();
+    renderHistory();
+  });
+
+  const cookies = $('#cookies-select');
+  cookies.value = state.settings.cookiesBrowser || '';
+  cookies.addEventListener('change', () => api.settings.set({ cookiesBrowser: cookies.value }));
+
+  const showVersion = (v) => ($('#engine-version').textContent = v ? `yt-dlp ${v}` : 'yt-dlp introuvable');
+  api.engine.version().then(showVersion);
+  api.engine.onVersion(showVersion);
+  $('#engine-update').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = 'Mise à jour…';
+    try {
+      showVersion(await api.engine.update());
+      btn.textContent = 'À jour';
+    } catch (err) {
+      btn.textContent = 'Échec de la mise à jour';
+      btn.title = cleanError(err);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // Dropping a link (from a browser tab or address bar) analyzes it.
+  document.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    document.body.classList.add('dragging');
+  });
+  document.addEventListener('dragleave', (e) => {
+    if (!e.relatedTarget) document.body.classList.remove('dragging');
+  });
+  document.addEventListener('drop', (e) => {
+    e.preventDefault();
+    document.body.classList.remove('dragging');
+    const text = (e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain')).split('\n')[0].trim();
+    if (text) {
+      selectTab('download');
+      $('#url-input').value = text;
+      analyze(text);
+    }
+  });
+
+  window.addEventListener('focus', pasteFromClipboard);
+  pasteFromClipboard();
+  $('#url-input').focus();
+}
+
+init();
