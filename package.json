@@ -2,7 +2,7 @@
   "name": "siphon",
   "productName": "Siphon",
   "version": "0.1.0",
-  "description": "Télécharge l'audio ou la vidéo de YouTube, Instagram, TikTok et d'autres sites.",
+  "description": "Download audio or video from YouTube, Instagram, TikTok and many other sites.",
   "main": "src/main/main.js",
   "author": "m1shko",
   "license": "MIT",

@@ -90,6 +90,6 @@ test('summarizeInfo flattens playlists', () => {
 
 test('friendly errors', () => {
   assert.match(y.friendlyError('ERROR: [Instagram] x: login required', 'https://instagram.com/p/x'), /Cookies/);
-  assert.match(y.friendlyError('ERROR: Private video'), /privée/);
+  assert.match(y.friendlyError('ERROR: Private video'), /private/);
   assert.equal(y.friendlyError('ERROR: something odd'), 'something odd');
 });

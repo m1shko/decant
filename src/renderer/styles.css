@@ -525,6 +525,11 @@ h2 {
   color: var(--muted);
 }
 
+.destination > span {
+  flex: none;
+  white-space: nowrap;
+}
+
 .destination svg {
   width: 16px;
   height: 16px;

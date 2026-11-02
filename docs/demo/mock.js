@@ -12,7 +12,7 @@
   const video = {
     type: 'video',
     url: 'https://www.youtube.com/watch?v=demo',
-    title: 'Sunset Drive — synthwave mix pour coder (1 heure)',
+    title: 'Sunset Drive — synthwave mix for coding (1 hour)',
     uploader: 'Neon Avenue',
     duration: 3725,
     thumbnail: art('#ff7a59', '#7b2ff7', 'SUNSET DRIVE'),
@@ -23,21 +23,21 @@
 
   const playlist = {
     type: 'playlist',
-    title: 'Chill du dimanche',
-    uploader: 'Léa M.',
+    title: 'Sunday chill',
+    uploader: 'Lea M.',
     source: 'YoutubeTab',
     entries: [
-      ['Matin brumeux', 214],
-      ['Café sur le port', 187],
-      ['Les toits de Lisbonne', 243],
-      ['Marée basse', 199],
-      ['Dernier tram', 228],
-      ['Lumière d’octobre', 176],
+      ['Misty morning', 214],
+      ['Coffee by the harbour', 187],
+      ['Lisbon rooftops', 243],
+      ['Low tide', 199],
+      ['Last tram home', 228],
+      ['October light', 176],
     ].map(([title, duration], i) => ({
       url: `https://www.youtube.com/watch?v=demo${i}`,
       title,
       duration,
-      uploader: 'Léa M.',
+      uploader: 'Lea M.',
       thumbnail: art(['#2bc0e4', '#f7971e', '#ee0979', '#56ab2f', '#614385', '#f857a6'][i], '#1d1d3a', ''),
     })),
   };
@@ -52,8 +52,8 @@
       kind: 'video',
       format: 'mp4',
       quality: '1080',
-      title: 'Recette express : pâtes au citron en 10 minutes',
-      thumbnail: art('#f9d423', '#ff4e50', 'RECETTE'),
+      title: 'Quick recipe: lemon pasta in 10 minutes',
+      thumbnail: art('#f9d423', '#ff4e50', 'RECIPE'),
     },
     {
       id: 'j2',
@@ -62,7 +62,7 @@
       kind: 'audio',
       format: 'mp3',
       quality: '320',
-      title: 'Live session acoustique — « Les jours tranquilles »',
+      title: 'Acoustic live session — “Quiet Days”',
       thumbnail: art('#43cea2', '#185a9d', 'LIVE'),
     },
     {
@@ -72,7 +72,7 @@
       kind: 'video',
       format: 'mp4',
       quality: 'best',
-      title: 'Mon chat découvre la neige pour la première fois',
+      title: 'My cat sees snow for the first time',
       thumbnail: art('#e0eafc', '#7f8fa6', 'TIKTOK'),
       filePath: '/demo.mp4',
     },
@@ -80,12 +80,12 @@
 
   const now = Date.now();
   const history = [
-    ['Mon chat découvre la neige pour la première fois', 'video', 'mp4', 'best', 0.2, '#e0eafc', '#7f8fa6'],
-    ['Sunset Drive — synthwave mix pour coder', 'audio', 'mp3', '320', 26, '#ff7a59', '#7b2ff7'],
-    ['Tuto : bien régler son vélo de route', 'video', 'mp4', '1080', 50, '#56ab2f', '#a8e063'],
-    ['Podcast — Épisode 42 : le sommeil', 'audio', 'm4a', null, 74, '#614385', '#516395'],
-    ['Reel : coucher de soleil à Biarritz', 'video', 'mp4', '720', 120, '#f857a6', '#ff5858'],
-    ['Session piano — improvisation', 'audio', 'flac', null, 170, '#232526', '#414345'],
+    ['My cat sees snow for the first time', 'video', 'mp4', 'best', 0.2, '#e0eafc', '#7f8fa6'],
+    ['Sunset Drive — synthwave mix for coding', 'audio', 'mp3', '320', 26, '#ff7a59', '#7b2ff7'],
+    ['How to tune your road bike', 'video', 'mp4', '1080', 50, '#56ab2f', '#a8e063'],
+    ['Podcast — Episode 42: sleep', 'audio', 'm4a', null, 74, '#614385', '#516395'],
+    ['Reel: sunset in Biarritz', 'video', 'mp4', '720', 120, '#f857a6', '#ff5858'],
+    ['Piano session — improvisation', 'audio', 'flac', null, 170, '#232526', '#414345'],
   ].map(([title, kind, format, quality, hours, a, b], i) => ({
     id: `h${i}`,
     title,
@@ -105,7 +105,7 @@
     probe: async (input) => (scene === 'playlist' ? playlist : video),
     settings: {
       get: async () => ({
-        outputDir: '/Users/toi/Downloads',
+        outputDir: '/Users/you/Downloads',
         kind: scene === 'video' ? 'video' : 'audio',
         audioFormat: 'mp3',
         audioQuality: '320',
