@@ -10,7 +10,7 @@
   "scripts": {
     "postinstall": "node scripts/fetch-binaries.mjs",
     "start": "electron .",
-    "test": "node --test test/",
+    "test": "node --test \"test/*.test.js\"",
     "dist": "electron-builder",
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win"
