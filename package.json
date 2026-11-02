@@ -1,0 +1,61 @@
+{
+  "name": "siphon",
+  "productName": "Siphon",
+  "version": "0.1.0",
+  "description": "Télécharge l'audio ou la vidéo de YouTube, Instagram, TikTok et d'autres sites.",
+  "main": "src/main/main.js",
+  "author": "m1shko",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "postinstall": "node scripts/fetch-binaries.mjs",
+    "start": "electron .",
+    "test": "node --test test/",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^45.2.1",
+    "electron-builder": "^26.18.0",
+    "ffmpeg-static": "^5.3.0",
+    "ffprobe-static": "^3.1.0"
+  },
+  "build": {
+    "appId": "lol.siphon.app",
+    "productName": "Siphon",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "bin",
+        "to": "bin"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "build/icon.png",
+      "identity": null
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
