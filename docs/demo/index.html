@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <title>Siphon</title>
@@ -14,8 +14,8 @@
         <span>Siphon</span>
       </div>
       <nav class="tabs" role="tablist">
-        <button role="tab" data-tab="download" aria-selected="true">Télécharger</button>
-        <button role="tab" data-tab="history" aria-selected="false">Historique <span id="history-count" class="count"></span></button>
+        <button role="tab" data-tab="download" aria-selected="true">Download</button>
+        <button role="tab" data-tab="history" aria-selected="false">History <span id="history-count" class="count"></span></button>
       </nav>
     </header>
 
@@ -29,10 +29,10 @@
             id="url-input"
             type="text"
             spellcheck="false"
-            placeholder="Colle un lien YouTube, Instagram, TikTok… ou tape une recherche"
-            aria-label="Lien ou recherche"
+            placeholder="Paste a YouTube, Instagram, TikTok… link, or type to search"
+            aria-label="Link or search"
           />
-          <button type="submit" class="btn primary" id="analyze-btn">Analyser</button>
+          <button type="submit" class="btn primary" id="analyze-btn">Go</button>
         </form>
 
         <div id="notice" class="notice" hidden></div>
@@ -40,36 +40,36 @@
 
         <div class="destination">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
-          <span>Enregistré dans</span>
-          <button id="dest-path" class="path" title="Ouvrir le dossier"></button>
-          <button id="dest-change" class="btn small">Changer</button>
+          <span>Saving to</span>
+          <button id="dest-path" class="path" title="Open the folder"></button>
+          <button id="dest-change" class="btn small">Change</button>
         </div>
 
         <section class="queue">
           <div class="section-head">
-            <h2>File d'attente</h2>
-            <button id="queue-clear" class="link" hidden>Effacer les terminés</button>
+            <h2>Queue</h2>
+            <button id="queue-clear" class="link" hidden>Clear finished</button>
           </div>
           <ul id="queue-list" class="rows"></ul>
-          <p id="queue-empty" class="empty">Rien en cours. Colle un lien pour commencer.</p>
+          <p id="queue-empty" class="empty">Nothing here yet. Paste a link to get started.</p>
         </section>
       </section>
 
       <section id="tab-history" class="tab" hidden>
         <div class="section-head">
-          <h2>Historique</h2>
-          <button id="history-clear" class="link">Tout effacer</button>
+          <h2>History</h2>
+          <button id="history-clear" class="link">Clear all</button>
         </div>
         <ul id="history-list" class="rows"></ul>
-        <p id="history-empty" class="empty">Aucun téléchargement pour l'instant.</p>
+        <p id="history-empty" class="empty">No downloads yet.</p>
       </section>
     </main>
 
     <footer class="statusbar">
-      <label class="cookies" title="Pour Instagram, les vidéos privées ou soumises à une limite d'âge : Siphon utilise la session de ce navigateur.">
+      <label class="cookies" title="For Instagram, private or age-restricted videos: Siphon uses your session from this browser.">
         Cookies
         <select id="cookies-select">
-          <option value="">Aucun</option>
+          <option value="">None</option>
           <option value="chrome">Chrome</option>
           <option value="firefox">Firefox</option>
           <option value="safari" data-platform="darwin">Safari</option>
@@ -81,7 +81,7 @@
       </label>
       <span class="spacer"></span>
       <span id="engine-version" class="muted"></span>
-      <button id="engine-update" class="link">Mettre à jour le moteur</button>
+      <button id="engine-update" class="link">Update engine</button>
     </footer>
 
     <script src="mock.js"></script>

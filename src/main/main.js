@@ -54,7 +54,7 @@ async function probe(_event, input, { playlist = false, search = false } = {}) {
   const { code, stdout, stderr } = await ytdlp.run(env.bin, args, { env: env.extraEnv }).done;
   if (code !== 0) throw new Error(ytdlp.friendlyError(stderr, input));
   const info = ytdlp.summarizeInfo(JSON.parse(stdout));
-  if (info.type === 'playlist' && !info.entries.length) throw new Error('Aucune vidéo trouvée.');
+  if (info.type === 'playlist' && !info.entries.length) throw new Error('No videos found.');
   return info;
 }
 
@@ -66,7 +66,7 @@ async function autoUpdateEngine() {
     settings.set({ lastEngineUpdate: Date.now() });
     send('engine:version', version);
   } catch (err) {
-    console.warn('[siphon] mise à jour de yt-dlp impossible :', err.message);
+    console.warn('[siphon] could not update yt-dlp:', err.message);
   }
 }
 
@@ -78,7 +78,7 @@ function registerIpc() {
 
   ipcMain.handle('folder:choose', async () => {
     const result = await dialog.showOpenDialog(win, {
-      title: 'Où enregistrer les téléchargements ?',
+      title: 'Where should downloads go?',
       defaultPath: outputDir(),
       properties: ['openDirectory', 'createDirectory'],
     });

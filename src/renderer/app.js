@@ -82,13 +82,13 @@ function parseTime(text) {
 
 function formatBytes(n) {
   if (!n) return '';
-  const units = ['o', 'Ko', 'Mo', 'Go'];
+  const units = ['B', 'KB', 'MB', 'GB'];
   let i = 0;
   while (n >= 1024 && i < units.length - 1) {
     n /= 1024;
     i++;
   }
-  return `${n.toFixed(n < 10 && i ? 1 : 0).replace('.', ',')} ${units[i]}`;
+  return `${n.toFixed(n < 10 && i ? 1 : 0)} ${units[i]}`;
 }
 
 function formatLabel({ kind, format, quality }) {
@@ -129,7 +129,7 @@ async function analyze(raw, { playlist = false } = {}) {
   state.probedInput = input;
   $('#preview').replaceChildren();
   $('#analyze-btn').disabled = true;
-  notice(search ? `Recherche de « ${input} »…` : 'Analyse du lien…', 'loading');
+  notice(search ? `Searching for “${input}”…` : 'Reading the link…', 'loading');
   try {
     const info = await api.probe(input, { playlist, search });
     if (token !== probeToken) return;
@@ -182,7 +182,7 @@ function renderOptions(info, opts) {
     segmented(
       [
         ['audio', 'Audio'],
-        ['video', 'Vidéo', info.type === 'video' && !info.hasVideo],
+        ['video', 'Video', info.type === 'video' && !info.hasVideo],
       ],
       opts.kind,
       (kind) => saveSetting({ kind }),
@@ -197,7 +197,7 @@ function renderOptions(info, opts) {
         opts.audioFormat,
         (audioFormat) => saveSetting({ audioFormat }),
       ),
-      h('span', { class: 'label' }, 'Qualité'),
+      h('span', { class: 'label' }, 'Quality'),
     );
     if (opts.audioFormat === 'mp3') {
       rows.push(
@@ -209,9 +209,9 @@ function renderOptions(info, opts) {
       );
     } else {
       const hints = {
-        m4a: "Son d'origine (AAC), sans réencodage.",
-        wav: 'Sans perte, non compressé (fichier lourd, pas de pochette).',
-        flac: 'Sans perte, compressé.',
+        m4a: 'Original audio (AAC), no re-encoding.',
+        wav: 'Lossless, uncompressed (large file, no cover art).',
+        flac: 'Lossless, compressed.',
       };
       rows.push(h('span', { class: 'hint' }, hints[opts.audioFormat]));
     }
@@ -221,24 +221,24 @@ function renderOptions(info, opts) {
     rows.push(
       h('span', { class: 'label' }, 'Format'),
       segmented([['mp4', 'MP4']], 'mp4', () => {}),
-      h('span', { class: 'label' }, 'Qualité'),
+      h('span', { class: 'label' }, 'Quality'),
       h(
         'div',
         {},
         segmented(
-          [['best', 'Maximale'], ...heights.map((x) => [String(x), x >= 2160 ? '4K' : x === 1440 ? '2K' : `${x}p`])],
+          [['best', 'Best'], ...heights.map((x) => [String(x), x >= 2160 ? '4K' : x === 1440 ? '2K' : `${x}p`])],
           quality,
           (videoQuality) => saveSetting({ videoQuality }),
         ),
         Number(quality) > 1080 || (quality === 'best' && Math.max(...heights) > 1080)
-          ? h('div', { class: 'hint' }, 'Au-delà de 1080p, la vidéo est en VP9/AV1 : lisible avec VLC ou IINA, et QuickTime sur les Mac récents.')
+          ? h('div', { class: 'hint' }, 'Above 1080p the video is VP9/AV1: plays in VLC or IINA, and in QuickTime on recent Macs.')
           : null,
       ),
     );
     opts.videoQuality = quality;
   }
 
-  if (info.type === 'video' && info.duration) rows.push(h('span', { class: 'label' }, 'Durée'), renderTrim(info));
+  if (info.type === 'video' && info.duration) rows.push(h('span', { class: 'label' }, 'Clip'), renderTrim(info));
   return h('div', { class: 'options' }, rows);
 }
 
@@ -257,7 +257,7 @@ function renderTrim(info) {
       type: 'text',
       value: trim[key],
       placeholder,
-      'aria-label': key === 'start' ? 'Début' : 'Fin',
+      'aria-label': key === 'start' ? 'Start' : 'End',
       class: trim[key] && parseTime(trim[key]) == null ? 'invalid' : null,
       oninput: (e) => {
         trim[key] = e.target.value;
@@ -268,8 +268,8 @@ function renderTrim(info) {
   return h(
     'div',
     { class: 'trim' },
-    h('label', { class: 'toggle' }, toggle, 'Extrait seulement'),
-    trim.enabled ? [h('span', { class: 'hint' }, 'de'), field('start', '0:00'), h('span', { class: 'hint' }, 'à'), field('end', formatDuration(info.duration))] : null,
+    h('label', { class: 'toggle' }, toggle, 'Only part of it'),
+    trim.enabled ? [h('span', { class: 'hint' }, 'from'), field('start', '0:00'), h('span', { class: 'hint' }, 'to'), field('end', formatDuration(info.duration))] : null,
   );
 }
 
@@ -299,11 +299,11 @@ function updateDownloadButton() {
   if (info.type === 'video') {
     const trim = trimValue();
     btn.disabled = trim === undefined;
-    btn.lastChild.textContent = `Télécharger · ${formatLabel(jobOptions(info))}`;
+    btn.lastChild.textContent = `Download · ${formatLabel(jobOptions(info))}`;
   } else {
     const count = state.selected.size;
     btn.disabled = count === 0;
-    btn.lastChild.textContent = `Ajouter ${count} élément${count > 1 ? 's' : ''} · ${formatLabel(jobOptions(info))}`;
+    btn.lastChild.textContent = `Add ${count} item${count === 1 ? '' : 's'} · ${formatLabel(jobOptions(info))}`;
   }
 }
 
@@ -316,7 +316,7 @@ function renderPreview() {
   const opts = settingsFor(info);
   const isPlaylist = info.type === 'playlist';
   const meta = isPlaylist
-    ? [`${info.entries.length} élément${info.entries.length > 1 ? 's' : ''}`, info.uploader].filter(Boolean).join(' · ')
+    ? [`${info.entries.length} item${info.entries.length === 1 ? '' : 's'}`, info.uploader].filter(Boolean).join(' · ')
     : [info.uploader, formatDuration(info.duration)].filter(Boolean).join(' · ');
 
   const card = h(
@@ -329,11 +329,11 @@ function renderPreview() {
       h(
         'div',
         { class: 'media-text' },
-        sourceName(info.source) ? h('span', { class: 'chip-source' }, isPlaylist ? `Playlist ${sourceName(info.source)}` : sourceName(info.source)) : null,
+        sourceName(info.source) ? h('span', { class: 'chip-source' }, isPlaylist ? `${sourceName(info.source)} playlist` : sourceName(info.source)) : null,
         h('div', { class: 'media-title', title: info.title }, info.title),
         h('div', { class: 'muted' }, meta),
         info.canExpand
-          ? h('button', { class: 'link', onclick: () => analyze(state.probedInput, { playlist: true }) }, 'Ce lien fait partie d’une playlist : tout afficher')
+          ? h('button', { class: 'link', onclick: () => analyze(state.probedInput, { playlist: true }) }, 'This link is part of a playlist: show all of it')
           : null,
       ),
     ),
@@ -361,7 +361,7 @@ function renderEntries(info) {
   return h(
     'div',
     {},
-    h('label', { class: 'toggle' }, all, 'Tout sélectionner'),
+    h('label', { class: 'toggle' }, all, 'Select all'),
     h(
       'ul',
       { class: 'entries' },
@@ -391,7 +391,7 @@ function renderSearch(info) {
   return h(
     'div',
     { class: 'card' },
-    h('div', { class: 'muted' }, `Résultats YouTube pour « ${state.probedInput} »`),
+    h('div', { class: 'muted' }, `YouTube results for “${state.probedInput}”`),
     h(
       'ul',
       { class: 'entries clickable' },
@@ -430,7 +430,7 @@ async function enqueue() {
   state.info = null;
   $('#url-input').value = '';
   renderPreview();
-  notice(specs.length > 1 ? `${specs.length} éléments ajoutés à la file d'attente.` : '');
+  notice(specs.length > 1 ? `${specs.length} items added to the queue.` : '');
   $('#url-input').focus();
 }
 
@@ -439,21 +439,21 @@ async function enqueue() {
 function jobStatus(job) {
   switch (job.status) {
     case 'queued':
-      return 'En attente';
+      return 'Waiting';
     case 'downloading': {
-      const parts = [`${Math.floor(job.percent || 0)} %`];
+      const parts = [`${Math.floor(job.percent || 0)}%`];
       if (job.speed) parts.push(`${formatBytes(job.speed)}/s`);
-      if (job.eta != null) parts.push(`${formatDuration(job.eta)} restantes`);
+      if (job.eta != null) parts.push(`${formatDuration(job.eta)} left`);
       return parts.join(' · ');
     }
     case 'processing':
-      return job.kind === 'audio' ? 'Conversion…' : 'Finalisation…';
+      return job.kind === 'audio' ? 'Converting…' : 'Finishing…';
     case 'done':
-      return 'Terminé';
+      return 'Done';
     case 'canceled':
-      return 'Annulé';
+      return 'Canceled';
     case 'error':
-      return job.error || 'Erreur';
+      return job.error || 'Error';
     default:
       return '';
   }
@@ -463,14 +463,14 @@ function renderJob(job) {
   const active = ['queued', 'downloading', 'processing'].includes(job.status);
   const actions = [];
   if (job.status === 'done') {
-    actions.push(iconButton('play', 'Ouvrir', () => api.file.open(job.filePath)));
-    actions.push(iconButton('folder', 'Afficher dans le dossier', () => api.file.reveal(job.filePath)));
+    actions.push(iconButton('play', 'Open', () => api.file.open(job.filePath)));
+    actions.push(iconButton('folder', 'Show in folder', () => api.file.reveal(job.filePath)));
   }
-  if (['error', 'canceled'].includes(job.status)) actions.push(iconButton('retry', 'Réessayer', () => api.queue.retry(job.id)));
+  if (['error', 'canceled'].includes(job.status)) actions.push(iconButton('retry', 'Retry', () => api.queue.retry(job.id)));
   actions.push(
     active
-      ? iconButton('close', 'Annuler', () => api.queue.cancel(job.id))
-      : iconButton('close', 'Retirer de la liste', () => api.queue.remove(job.id)),
+      ? iconButton('close', 'Cancel', () => api.queue.cancel(job.id))
+      : iconButton('close', 'Remove from list', () => api.queue.remove(job.id)),
   );
 
   return h(
@@ -485,7 +485,7 @@ function renderJob(job) {
         'div',
         { class: 'row-sub' },
         h('span', { class: 'tag' }, formatLabel(job)),
-        job.trim ? h('span', {}, `${formatDuration(Number(job.trim.start))} → ${job.trim.end ? formatDuration(Number(job.trim.end)) : 'fin'}`) : null,
+        job.trim ? h('span', {}, `${formatDuration(Number(job.trim.start))} → ${job.trim.end ? formatDuration(Number(job.trim.end)) : 'end'}`) : null,
         h('span', { class: 'status' }, jobStatus(job)),
       ),
       active ? h('div', { class: 'progress' }, h('div', { style: `width: ${job.percent || 0}%` })) : null,
@@ -525,7 +525,7 @@ async function renderHistory() {
   $('#history-count').textContent = items.length ? items.length : '';
   $('#history-empty').hidden = items.length > 0;
   const exists = await Promise.all(items.map((i) => api.file.exists(i.filePath)));
-  const dateFmt = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+  const dateFmt = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   $('#history-list').replaceChildren(
     ...items.map((item, i) =>
       h(
@@ -541,20 +541,20 @@ async function renderHistory() {
             { class: 'row-sub' },
             h('span', { class: 'tag' }, formatLabel(item)),
             h('span', {}, dateFmt.format(item.date)),
-            exists[i] ? null : h('span', {}, 'Fichier déplacé ou supprimé'),
+            exists[i] ? null : h('span', {}, 'File moved or deleted'),
           ),
         ),
         h(
           'div',
           { class: 'row-actions' },
-          exists[i] ? iconButton('play', 'Ouvrir', () => api.file.open(item.filePath)) : null,
-          exists[i] ? iconButton('folder', 'Afficher dans le dossier', () => api.file.reveal(item.filePath)) : null,
-          iconButton('retry', 'Télécharger à nouveau', () => {
+          exists[i] ? iconButton('play', 'Open', () => api.file.open(item.filePath)) : null,
+          exists[i] ? iconButton('folder', 'Show in folder', () => api.file.reveal(item.filePath)) : null,
+          iconButton('retry', 'Download again', () => {
             selectTab('download');
             $('#url-input').value = item.url;
             analyze(item.url);
           }),
-          iconButton('trash', "Retirer de l'historique", async () => {
+          iconButton('trash', 'Remove from history', async () => {
             state.history = await api.history.remove(item.id);
             renderHistory();
           }),
@@ -579,7 +579,7 @@ function renderDestination() {
   // The button is right-to-left so long paths cut on the left; the LRM marks
   // keep the slashes where they belong.
   btn.textContent = `‎${dir}‎`;
-  btn.title = `${dir}\nCliquer pour ouvrir le dossier`;
+  btn.title = `${dir}\nClick to open the folder`;
 }
 
 async function pasteFromClipboard() {
@@ -642,7 +642,7 @@ async function init() {
 
   $('#queue-clear').addEventListener('click', () => api.queue.clear());
   $('#history-clear').addEventListener('click', async () => {
-    if (!confirm("Effacer tout l'historique ? Les fichiers ne seront pas supprimés.")) return;
+    if (!confirm('Clear the whole history? Your files will not be deleted.')) return;
     state.history = await api.history.clear();
     renderHistory();
   });
@@ -651,18 +651,18 @@ async function init() {
   cookies.value = state.settings.cookiesBrowser || '';
   cookies.addEventListener('change', () => api.settings.set({ cookiesBrowser: cookies.value }));
 
-  const showVersion = (v) => ($('#engine-version').textContent = v ? `yt-dlp ${v}` : 'yt-dlp introuvable');
+  const showVersion = (v) => ($('#engine-version').textContent = v ? `yt-dlp ${v}` : 'yt-dlp not found');
   api.engine.version().then(showVersion);
   api.engine.onVersion(showVersion);
   $('#engine-update').addEventListener('click', async (e) => {
     const btn = e.currentTarget;
     btn.disabled = true;
-    btn.textContent = 'Mise à jour…';
+    btn.textContent = 'Updating…';
     try {
       showVersion(await api.engine.update());
-      btn.textContent = 'À jour';
+      btn.textContent = 'Up to date';
     } catch (err) {
-      btn.textContent = 'Échec de la mise à jour';
+      btn.textContent = 'Update failed';
       btn.title = cleanError(err);
     } finally {
       btn.disabled = false;

@@ -63,7 +63,7 @@ function downloadArgs(job, env) {
     const end = parseTime(trim.end);
     const range = `${start}-${end ?? 'inf'}`;
     args.push('--download-sections', `*${range}`, '--force-keyframes-at-cuts');
-    name += ` (${formatTime(start).replace(/:/g, '.')}-${end == null ? 'fin' : formatTime(end).replace(/:/g, '.')})`;
+    name += ` (${formatTime(start).replace(/:/g, '.')}-${end == null ? 'end' : formatTime(end).replace(/:/g, '.')})`;
   }
   args.push('--output', `${name}.%(ext)s`);
 
@@ -124,24 +124,24 @@ function isPostprocessLine(line) {
 
 function friendlyError(stderr, url = '') {
   const lines = String(stderr).split(/\r?\n/).filter((l) => l.startsWith('ERROR:'));
-  const raw = (lines.at(-1) || String(stderr).trim().split(/\r?\n/).at(-1) || 'Erreur inconnue').replace(/^ERROR:\s*/, '');
+  const raw = (lines.at(-1) || String(stderr).trim().split(/\r?\n/).at(-1) || 'Unknown error').replace(/^ERROR:\s*/, '');
   const lower = raw.toLowerCase();
   if (/login required|log in|logged-in|rate-limit reached|requested content is not available/.test(lower) && /instagram/.test(url + lower)) {
-    return "Instagram demande d'être connecté. Choisis ton navigateur dans « Cookies » (en bas) puis réessaie.";
+    return 'Instagram wants you to be logged in. Pick your browser under “Cookies” (bottom left) and try again.';
   }
   if (/sign in to confirm|not a bot/.test(lower)) {
-    return 'YouTube demande une vérification. Choisis ton navigateur dans « Cookies » (en bas) puis réessaie.';
+    return 'YouTube wants to check you are not a bot. Pick your browser under “Cookies” (bottom left) and try again.';
   }
-  if (/private/.test(lower)) return 'Cette vidéo est privée.';
-  if (/unsupported url/.test(lower)) return "Ce lien n'est pas pris en charge.";
-  if (/video unavailable|not available|removed|404/.test(lower)) return "Cette vidéo n'est pas (ou plus) disponible.";
+  if (/private/.test(lower)) return 'This video is private.';
+  if (/unsupported url/.test(lower)) return 'This link is not supported.';
+  if (/video unavailable|not available|removed|404/.test(lower)) return 'This video is not available (or no longer).';
   if (/age/.test(lower) && /restrict|confirm your age/.test(lower)) {
-    return 'Vidéo soumise à une limite d\'âge : choisis ton navigateur dans « Cookies » (en bas).';
+    return 'This video is age-restricted: pick your browser under “Cookies” (bottom left).';
   }
   if (/could not copy .* cookie|cookies? database|keychain|operation not permitted/.test(lower)) {
-    return `Impossible de lire les cookies du navigateur : ${raw}`;
+    return `Could not read the browser cookies: ${raw}`;
   }
-  if (/getaddrinfo|network|timed out|connection/.test(lower)) return 'Problème de connexion internet.';
+  if (/getaddrinfo|network|timed out|connection/.test(lower)) return 'Network problem: check your internet connection.';
   return raw;
 }
 

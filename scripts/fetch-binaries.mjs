@@ -21,18 +21,18 @@ const YTDLP_ASSET = {
 async function fetchYtDlp() {
   const target = path.join(binDir, `yt-dlp${exe}`);
   if (fs.existsSync(target) && !process.env.SIPHON_REFRESH_BINARIES) {
-    console.log('[siphon] yt-dlp déjà présent');
+    console.log('[siphon] yt-dlp already present');
     return;
   }
   const url = `https://github.com/yt-dlp/yt-dlp/releases/latest/download/${YTDLP_ASSET}`;
-  console.log(`[siphon] téléchargement de ${url}`);
+  console.log(`[siphon] downloading ${url}`);
   const res = await fetch(url);
   if (!res.ok) throw new Error(`yt-dlp: HTTP ${res.status}`);
   fs.writeFileSync(target, Buffer.from(await res.arrayBuffer()), { mode: 0o755 });
 }
 
 function copyTool(name, source) {
-  if (!source || !fs.existsSync(source)) throw new Error(`${name} introuvable (${source})`);
+  if (!source || !fs.existsSync(source)) throw new Error(`${name} not found (${source})`);
   const target = path.join(binDir, `${name}${exe}`);
   fs.copyFileSync(source, target);
   fs.chmodSync(target, 0o755);
@@ -42,4 +42,4 @@ fs.mkdirSync(binDir, { recursive: true });
 copyTool('ffmpeg', require('ffmpeg-static'));
 copyTool('ffprobe', require('ffprobe-static').path);
 await fetchYtDlp();
-console.log(`[siphon] binaires prêts dans ${binDir}`);
+console.log(`[siphon] binaries ready in ${binDir}`);
