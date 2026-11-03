@@ -66,7 +66,7 @@ async function autoUpdateEngine() {
     settings.set({ lastEngineUpdate: Date.now() });
     send('engine:version', version);
   } catch (err) {
-    console.warn('[siphon] could not update yt-dlp:', err.message);
+    console.warn('[decant] could not update yt-dlp:', err.message);
   }
 }
 
@@ -129,7 +129,7 @@ function createWindow() {
     height: 760,
     minWidth: 760,
     minHeight: 600,
-    title: 'Siphon',
+    title: 'Decant',
     backgroundColor: '#111114',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     autoHideMenuBar: true,

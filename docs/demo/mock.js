@@ -100,7 +100,7 @@
 
   const noop = () => {};
   const listen = () => noop;
-  window.siphon = {
+  window.decant = {
     platform: 'demo',
     probe: async (input) => (scene === 'playlist' ? playlist : video),
     settings: {

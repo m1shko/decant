@@ -1,9 +1,9 @@
-const api = window.siphon;
+const api = window.decant;
 
 const AUDIO_FORMATS = ['mp3', 'm4a', 'wav', 'flac'];
 const MP3_BITRATES = ['320', '192', '128'];
 const ALL_HEIGHTS = [2160, 1440, 1080, 720, 480, 360];
-// Links Siphon fills in by itself when they show up in the clipboard.
+// Links Decant fills in by itself when they show up in the clipboard.
 const AUTO_PASTE = /^https?:\/\/([\w-]+\.)*(youtube\.com|youtu\.be|instagram\.com|tiktok\.com|x\.com|twitter\.com|facebook\.com|fb\.watch|vimeo\.com|dailymotion\.com|twitch\.tv|soundcloud\.com)\//i;
 
 const $ = (sel) => document.querySelector(sel);

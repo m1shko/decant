@@ -3,6 +3,14 @@ const { app } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 
+// The app used to be called Siphon: carry its settings and history over.
+const oldDir = path.join(app.getPath('appData'), 'Siphon');
+if (!fs.existsSync(app.getPath('userData')) && fs.existsSync(oldDir)) {
+  try {
+    fs.renameSync(oldDir, app.getPath('userData'));
+  } catch {}
+}
+
 function jsonFile(name, fallback) {
   const file = path.join(app.getPath('userData'), name);
   let data;

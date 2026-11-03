@@ -7,7 +7,7 @@ const listen = (channel) => (callback) => {
   return () => ipcRenderer.removeListener(channel, handler);
 };
 
-contextBridge.exposeInMainWorld('siphon', {
+contextBridge.exposeInMainWorld('decant', {
   platform: process.platform,
   probe: invoke('probe'),
   settings: { get: invoke('settings:get'), set: invoke('settings:set') },
