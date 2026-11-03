@@ -126,6 +126,7 @@
       onRemoved: listen,
     },
     history: { list: async () => history, remove: async () => history, clear: async () => [], onUpdate: listen },
+    library: { list: async () => [], remove: async () => [], progress: noop, export: noop, onUpdate: listen },
     file: { exists: async (f) => Boolean(f), reveal: noop, open: noop },
     openLink: noop,
     readClipboard: async () =>

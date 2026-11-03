@@ -45,6 +45,19 @@ test('trim adds a section and names the file after it', () => {
   assert.equal(after(open, '--download-sections'), '*10-inf');
 });
 
+test('library downloads keep a cover file and a fixed name', () => {
+  const args = y.downloadArgs(job({ kind: 'video', format: 'mp4', quality: '1080', library: true, trim: { start: '80', end: null } }), env);
+  assert.ok(args.includes('--output'));
+  assert.ok(args.includes('media.%(ext)s'));
+  assert.ok(args.includes('thumbnail:cover.%(ext)s'));
+  assert.ok(args.includes('--write-thumbnail'));
+  const wav = y.downloadArgs(job({ kind: 'audio', format: 'wav', library: true }), env);
+  assert.ok(!wav.includes('--embed-thumbnail'));
+  assert.equal(after(wav, '--convert-thumbnails'), 'jpg');
+  const plain = y.downloadArgs(job({ kind: 'audio', format: 'mp3', quality: '320' }), env);
+  assert.ok(!plain.includes('--write-thumbnail'));
+});
+
 test('cookies are passed through', () => {
   const args = y.downloadArgs(job({ kind: 'audio', format: 'm4a' }), { ...env, cookiesBrowser: 'firefox' });
   assert.equal(after(args, '--cookies-from-browser'), 'firefox');

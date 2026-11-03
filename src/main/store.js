@@ -20,12 +20,14 @@ function jsonFile(name, fallback) {
     data = { ...fallback };
   }
   let timer = null;
+  const write = () => {
+    timer = null;
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(data, null, 2));
+  };
   const save = () => {
     clearTimeout(timer);
-    timer = setTimeout(() => {
-      fs.mkdirSync(path.dirname(file), { recursive: true });
-      fs.writeFileSync(file, JSON.stringify(data, null, 2));
-    }, 200);
+    timer = setTimeout(write, 200);
   };
   return {
     get: () => data,
@@ -33,6 +35,13 @@ function jsonFile(name, fallback) {
       Object.assign(data, patch);
       save();
       return data;
+    },
+    // Writes a pending change now (the app is about to quit).
+    flush() {
+      if (timer) {
+        clearTimeout(timer);
+        write();
+      }
     },
   };
 }
@@ -64,4 +73,36 @@ const history = {
   },
 };
 
-module.exports = { settings, history };
+// Videos and songs saved inside the app: each one gets its own folder in
+// Library/ holding the media file and its cover, so they play offline.
+const LIBRARY_DIR = path.join(app.getPath('userData'), 'Library');
+const libraryFile = jsonFile('library.json', { items: [] });
+
+const library = {
+  dir: (id) => path.join(LIBRARY_DIR, id),
+  list: () => libraryFile.get().items,
+  get: (id) => libraryFile.get().items.find((i) => i.id === id),
+  add(entry) {
+    libraryFile.set({ items: [entry, ...libraryFile.get().items] });
+  },
+  update(id, patch) {
+    libraryFile.set({ items: libraryFile.get().items.map((i) => (i.id === id ? { ...i, ...patch } : i)) });
+  },
+  remove(id) {
+    libraryFile.set({ items: libraryFile.get().items.filter((i) => i.id !== id) });
+    fs.rm(library.dir(id), { recursive: true, force: true }, () => {});
+  },
+  // Deletes folders left by downloads that never finished.
+  prune() {
+    let names = [];
+    try {
+      names = fs.readdirSync(LIBRARY_DIR);
+    } catch {}
+    for (const name of names) {
+      if (!library.get(name)) fs.rm(library.dir(name), { recursive: true, force: true }, () => {});
+    }
+  },
+  flush: () => libraryFile.flush(),
+};
+
+module.exports = { settings, history, library };

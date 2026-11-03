@@ -1,10 +1,17 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, protocol } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
+const { Readable } = require('node:stream');
 const ytdlp = require('./ytdlp');
 const binaries = require('./binaries');
-const { settings, history } = require('./store');
+const { settings, history, library } = require('./store');
 const { Queue } = require('./queue');
+
+// The player reads library files through decant-media://<id>/media (and /cover).
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'decant-media', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } },
+]);
 
 const DAY = 24 * 60 * 60 * 1000;
 let win = null;
@@ -34,6 +41,10 @@ function send(channel, payload) {
 queue.on('update', (job) => send('queue:update', job));
 queue.on('removed', (id) => send('queue:removed', id));
 queue.on('done', (job) => {
+  if (job.library) {
+    addToLibrary(job);
+    return;
+  }
   history.add({
     id: job.id,
     title: job.title,
@@ -47,6 +58,87 @@ queue.on('done', (job) => {
   });
   send('history:update', history.list());
 });
+
+function addToLibrary(job) {
+  const dir = library.dir(job.libraryId);
+  const file = job.filePath && path.basename(job.filePath);
+  let size = 0;
+  try {
+    size = fs.statSync(path.join(dir, file)).size;
+  } catch {}
+  library.add({
+    id: job.libraryId,
+    url: job.url,
+    title: job.title,
+    uploader: job.uploader || null,
+    duration: job.duration ?? null,
+    thumbnail: job.thumbnail,
+    kind: job.kind,
+    format: job.format,
+    quality: job.quality,
+    trim: job.trim || null,
+    file,
+    cover: fs.existsSync(path.join(dir, 'cover.jpg')) ? 'cover.jpg' : null,
+    size,
+    date: Date.now(),
+    position: 0,
+  });
+  send('library:update', library.list());
+}
+
+const MIME = {
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+  m4a: 'audio/mp4',
+  mp3: 'audio/mpeg',
+  flac: 'audio/flac',
+  wav: 'audio/wav',
+  jpg: 'image/jpeg',
+};
+
+// Serves library files with byte ranges, which the player needs to seek.
+// Only files the library knows about can be reached.
+function serveLibrary(request) {
+  const { host: id, pathname } = new URL(request.url);
+  const item = library.get(id);
+  const name = item && { '/media': item.file, '/cover': item.cover }[pathname];
+  if (!name) return new Response(null, { status: 404 });
+  const file = path.join(library.dir(id), name);
+  let size;
+  try {
+    size = fs.statSync(file).size;
+  } catch {
+    return new Response(null, { status: 404 });
+  }
+  const headers = { 'Content-Type': MIME[path.extname(file).slice(1)] || 'application/octet-stream', 'Accept-Ranges': 'bytes' };
+  const range = /^bytes=(\d*)-(\d*)$/.exec(request.headers.get('Range') || '');
+  if (!range) {
+    return new Response(Readable.toWeb(fs.createReadStream(file)), { headers: { ...headers, 'Content-Length': String(size) } });
+  }
+  const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
+  const end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+  if (start >= size || start > end) {
+    return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${size}` } });
+  }
+  return new Response(Readable.toWeb(fs.createReadStream(file, { start, end })), {
+    status: 206,
+    headers: { ...headers, 'Content-Range': `bytes ${start}-${end}/${size}`, 'Content-Length': String(end - start + 1) },
+  });
+}
+
+async function exportLibraryItem(id) {
+  const item = library.get(id);
+  if (!item) return null;
+  const ext = path.extname(item.file);
+  const base = item.title.replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').slice(0, 150).trim() || 'video';
+  const result = await dialog.showSaveDialog(win, {
+    title: 'Save a copy',
+    defaultPath: path.join(outputDir(), `${base}${ext}`),
+  });
+  if (result.canceled || !result.filePath) return null;
+  await fs.promises.copyFile(path.join(library.dir(id), item.file), result.filePath);
+  return result.filePath;
+}
 
 async function probe(_event, input, { playlist = false, search = false } = {}) {
   const env = engineEnv();
@@ -89,7 +181,15 @@ function registerIpc() {
   ipcMain.handle('folder:open', () => shell.openPath(outputDir()));
 
   ipcMain.handle('queue:list', () => queue.list());
-  ipcMain.handle('queue:add', (_e, specs) => queue.add(specs.map((s) => ({ ...s, outputDir: outputDir() }))));
+  ipcMain.handle('queue:add', (_e, specs) =>
+    queue.add(
+      specs.map((s) => {
+        if (!s.library) return { ...s, outputDir: outputDir() };
+        const libraryId = crypto.randomUUID();
+        return { ...s, libraryId, outputDir: library.dir(libraryId) };
+      }),
+    ),
+  );
   ipcMain.handle('queue:cancel', (_e, id) => queue.cancel(id));
   ipcMain.handle('queue:retry', (_e, id) => queue.retry(id));
   ipcMain.handle('queue:remove', (_e, id) => queue.remove(id));
@@ -104,6 +204,21 @@ function registerIpc() {
     history.clear();
     return [];
   });
+
+  ipcMain.handle('library:list', () => library.list());
+  ipcMain.handle('library:remove', (_e, id) => {
+    library.remove(id);
+    return library.list();
+  });
+  ipcMain.handle('library:progress', (_e, id, patch) => {
+    const { position, duration } = patch;
+    library.update(id, {
+      position: Number.isFinite(position) ? position : 0,
+      ...(Number.isFinite(duration) ? { duration } : {}),
+      watched: Date.now(),
+    });
+  });
+  ipcMain.handle('library:export', (_e, id) => exportLibraryItem(id));
 
   ipcMain.handle('file:exists', (_e, file) => Boolean(file) && fs.existsSync(file));
   ipcMain.handle('file:reveal', (_e, file) => {
@@ -148,6 +263,8 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  library.prune();
+  protocol.handle('decant-media', serveLibrary);
   registerIpc();
   createWindow();
   autoUpdateEngine();
@@ -155,6 +272,8 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
+
+app.on('will-quit', () => library.flush());
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
