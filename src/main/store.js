@@ -59,6 +59,8 @@ const settings = jsonFile('settings.json', {
   playerVolume: 1,
   playerMuted: false,
   theater: false,
+  autoPip: true,
+  pipBounds: null,
   lastEngineUpdate: 0,
 });
 

@@ -63,6 +63,8 @@ const ICONS = {
   fullscreen: 'M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5',
   exitFullscreen: 'M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5',
   check: 'M5 12.5l4.5 4.5L19 7.5',
+  back10: 'M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4v4h4M10 10v5M13 10h2v5h-2z',
+  forward10: 'M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4v4h-4M9 10v5M12 10h2v5h-2z',
   playlist: 'M4 6h12M4 11h12M4 16h7M15 14.5v6l5-3z',
   shuffle: 'M3 7h3.5c2 0 3.2 1 4.3 2.7l2.4 4.6c1.1 1.7 2.3 2.7 4.3 2.7H21M3 17h3.5c1.4 0 2.4-.5 3.2-1.4M14.3 8.4c.8-.9 1.8-1.4 3.2-1.4H21M18 4l3 3-3 3M18 14l3 3-3 3',
   chevron: 'M9 6l6 6-6 6',
@@ -125,6 +127,17 @@ function formatLabel({ kind, format, quality }) {
 function sourceName(source) {
   if (!source) return null;
   return { Youtube: 'YouTube', YoutubeTab: 'YouTube', TikTok: 'TikTok', Instagram: 'Instagram', Twitter: 'X' }[source] || source;
+}
+
+// A dialog takes the focus from the window: that is not the app going to the
+// background, so no picture-in-picture meanwhile.
+async function withDialog(fn) {
+  state.dialog = true;
+  try {
+    return await fn();
+  } finally {
+    setTimeout(() => (state.dialog = false), 400);
+  }
 }
 
 // --- Notices ---------------------------------------------------------------
@@ -623,12 +636,12 @@ function renderTile(item) {
       h(
         'div',
         { class: 'tile-actions' },
-        iconButton('export', 'Save a copy…', stop(() => api.library.export(item.id))),
+        iconButton('export', 'Save a copy…', stop(() => withDialog(() => api.library.export(item.id)))),
         iconButton(
           'trash',
           'Remove from library',
           stop(async () => {
-            if (!confirm(`Remove “${item.title}” from your library? The file will be deleted.`)) return;
+            if (!(await withDialog(() => confirm(`Remove “${item.title}” from your library? The file will be deleted.`)))) return;
             if (player?.item.id === item.id) stopPlayer();
             applyLibrary(await api.library.remove(item.id));
           }),
@@ -772,7 +785,7 @@ function renderPlaylistView(playlist) {
         h('button', { class: 'btn', disabled: items.length < 2, onclick: () => playPlaylist(playlist, 0, { shuffle: true }) }, icon('shuffle'), 'Shuffle'),
         playlist.url ? h('button', { class: 'btn', onclick: () => api.openLink(playlist.url) }, 'Open original') : null,
         iconButton('trash', 'Delete playlist', async () => {
-          if (!confirm(`Delete the playlist “${playlist.title}”? Its videos stay in your library.`)) return;
+          if (!(await withDialog(() => confirm(`Delete the playlist “${playlist.title}”? Its videos stay in your library.`)))) return;
           state.openPlaylist = null;
           applyLibrary(await api.library.removePlaylist(playlist.id));
         }),
@@ -944,9 +957,12 @@ function seekChapter(step) {
 function openPlayer(item, { queue = null, mini = false } = {}) {
   if (player?.item.id === item.id) {
     if (queue) player.queue = queue;
-    return expandPlayer();
+    player.mini = false;
+    return pip ? leavePip() : expandPlayer();
   }
-  stopPlayer();
+  // The next video of a playlist goes on in the picture-in-picture window.
+  const keepPip = Boolean(pip) && item.kind !== 'audio';
+  stopPlayer({ keepPip });
   const audio = item.kind === 'audio';
   const media = h(
     audio ? 'audio' : 'video',
@@ -969,6 +985,8 @@ function openPlayer(item, { queue = null, mini = false } = {}) {
   const on = (target, type, fn) => target.addEventListener(type, fn, { signal: listeners.signal });
   let lastSave = 0;
   const save = (position = media.currentTime) => {
+    // While the video moves to or from the PiP window it briefly reads 0 s.
+    if (player?.media === media && player.moving) return;
     lastSave = Date.now();
     const duration = Number.isFinite(media.duration) ? media.duration : undefined;
     Object.assign(item, { position, ...(duration ? { duration } : {}) });
@@ -999,6 +1017,13 @@ function openPlayer(item, { queue = null, mini = false } = {}) {
     updateControls();
     poke();
     requestAnimationFrame(tick);
+  });
+  on(media, 'playing', () => {
+    // Plays by itself only the first time: moving to the PiP window reloads it.
+    media.autoplay = false;
+    // Started while the app is in the background (a media key): PiP as well.
+    // Not when it only resumes after moving between windows.
+    if (!document.hasFocus() && Date.now() - (player.movedAt || 0) > 1500) setTimeout(autoPip, 200);
   });
   on(media, 'ended', () => {
     save(0);
@@ -1031,6 +1056,7 @@ function openPlayer(item, { queue = null, mini = false } = {}) {
   }
   if (mini) minimizePlayer();
   else expandPlayer();
+  if (keepPip && pip) renderPip();
 
   // Items saved by older versions have no description: fetch it once.
   if (item.description === undefined && item.url) {
@@ -1110,7 +1136,8 @@ function renderDescription(item) {
 function tick() {
   if (!player || player.media.paused) return;
   updateTime();
-  requestAnimationFrame(tick);
+  // The app's window may be hidden behind others, and its frames slowed down.
+  (pip && !pip.win.closed ? pip.win : window).requestAnimationFrame(tick);
 }
 
 // --- Player: full view ---
@@ -1172,7 +1199,7 @@ function expandPlayer() {
   c.settings = ctl('settings', 'Settings', () => (player.menuOpen ? closeMenu() : openMenu('main')));
   c.mini = ctl('mini', 'Mini player (i)', toMini);
   c.theater = audio ? null : ctl('theater', 'Theater mode (t)', toggleTheater);
-  c.pip = audio || !document.pictureInPictureEnabled ? null : ctl('pip', 'Picture in picture', togglePip);
+  c.pip = audio ? null : ctl('pip', 'Picture in picture', () => (pip ? leavePip() : enterPip({ manual: true })));
   c.fullscreen = audio ? null : ctl('fullscreen', 'Full screen (f)', toggleFullscreen);
 
   player.controls = h(
@@ -1229,7 +1256,7 @@ function expandPlayer() {
       onmouseleave: () => player && !player.media.paused && player.stage.classList.add('idle'),
     },
     surface,
-    media,
+    pip ? pipPlaceholder() : media,
     player.captions,
     player.flashEl,
     player.bubble,
@@ -1283,7 +1310,7 @@ function expandPlayer() {
       h(
         'div',
         { class: 'row-actions' },
-        iconButton('export', 'Save a copy…', () => api.library.export(item.id)),
+        iconButton('export', 'Save a copy…', () => withDialog(() => api.library.export(item.id))),
         item.url ? h('button', { class: 'btn small', onclick: () => api.openLink(item.url) }, 'Open original') : null,
       ),
     ),
@@ -1454,6 +1481,7 @@ function showHover(time, clientX) {
 // Everything that moves with the playhead.
 function updateTime() {
   if (!player) return;
+  updatePip();
   const { media, item } = player;
   const time = media.currentTime;
   const duration = Number.isFinite(media.duration) ? media.duration : 0;
@@ -1497,6 +1525,7 @@ function updateTime() {
 
 // Button states: play/pause, volume, subtitles, theater, full screen.
 function updateControls() {
+  updatePip();
   if (!player || player.mini) {
     updatePlayState();
     return;
@@ -1611,9 +1640,161 @@ function toggleTheater() {
   updateTime();
 }
 
-function togglePip() {
-  if (document.pictureInPictureElement) document.exitPictureInPicture();
-  else player.media.requestPictureInPicture?.();
+// --- Player: picture in picture ---
+
+// The PiP window ({ win, manual, root, ctl, bar, time }), opened by enterPip().
+// The video element itself moves there, so the player keeps working as is.
+let pip = null;
+
+// Moves the video to another place, in this window or the PiP one. Chromium
+// reloads a video that changes windows: put it back where it was.
+function moveMedia(place) {
+  const { media } = player;
+  const from = media.ownerDocument;
+  if (media.readyState === 0) return place();
+  const time = media.currentTime;
+  const playing = !media.paused;
+  player.save();
+  place();
+  if (media.ownerDocument === from) return;
+  player.moving = true;
+  player.movedAt = Date.now();
+  media.addEventListener(
+    'loadedmetadata',
+    () => {
+      media.currentTime = time;
+      if (playing) media.play();
+    },
+    { once: true },
+  );
+  media.addEventListener('canplay', () => player?.media === media && (player.moving = false), { once: true });
+}
+
+// manual: opened with the button, so coming back to the app keeps it open.
+function enterPip({ manual = false } = {}) {
+  if (pip || !player || player.item.kind === 'audio' || player.media.error) return;
+  if (document.fullscreenElement) document.exitFullscreen();
+  const win = window.open('about:blank', 'decant-pip');
+  if (!win) return;
+  pip = { win, manual };
+  const doc = win.document;
+  doc.documentElement.className = 'pip-window';
+  doc.head.append(h('meta', { charset: 'utf-8' }), h('link', { rel: 'stylesheet', href: new URL('styles.css', location.href).href }));
+  win.addEventListener('pagehide', () => leavePip());
+  // The app shows a placeholder where the video was.
+  if (player.mini) minimizePlayer();
+  else expandPlayer();
+  renderPip();
+}
+
+function pipPlaceholder() {
+  return h(
+    'div',
+    { class: 'pip-placeholder' },
+    icon('pip'),
+    h('div', {}, 'Playing in picture-in-picture'),
+    h('button', { class: 'btn small', onclick: () => leavePip() }, 'Bring it back'),
+  );
+}
+
+function pipButton(name, label, onclick, cls = '') {
+  return h('button', { class: `pip-btn ${cls}`, title: label, 'aria-label': label, onclick }, icon(name));
+}
+
+// Fills the PiP window for the video playing (again for each playlist item).
+function renderPip() {
+  const { media, item } = player;
+  const doc = pip.win.document;
+  doc.title = item.title;
+  const c = (pip.ctl = {});
+  c.play = pipButton('play', 'Play', togglePlay, 'big filled');
+  pip.bar = h('div', { class: 'pip-fill' });
+  pip.time = h('span', { class: 'pip-time' });
+  pip.captions = h('div', { class: 'captions' });
+  const seek = h('div', { class: 'pip-seek' }, h('div', { class: 'pip-track' }, pip.bar));
+  const seekTo = (e) => {
+    const box = seek.getBoundingClientRect();
+    if (media.duration) media.currentTime = clamp((e.clientX - box.left) / box.width, 0, 1) * media.duration;
+  };
+  seek.addEventListener('pointerdown', (e) => {
+    seek.setPointerCapture(e.pointerId);
+    seekTo(e);
+  });
+  seek.addEventListener('pointermove', (e) => seek.hasPointerCapture(e.pointerId) && seekTo(e));
+  pip.root = h(
+    'div',
+    { class: 'pip' },
+    pip.captions,
+    h(
+      'div',
+      { class: 'pip-overlay' },
+      h(
+        'div',
+        { class: 'pip-top' },
+        h('span', { class: 'pip-title' }, item.title),
+        pipButton('expand', 'Back to Decant', () => leavePip({ focus: true })),
+        pipButton('close', 'Close', () => leavePip({ pause: true })),
+      ),
+      h(
+        'div',
+        { class: 'pip-center' },
+        player.queue ? pipButton('prevChapter', 'Previous', previousInQueue, 'filled') : pipButton('back10', 'Back 10 s', () => skip(-10)),
+        c.play,
+        player.queue ? pipButton('nextChapter', 'Next', () => playAdjacent(1), 'filled') : pipButton('forward10', 'Forward 10 s', () => skip(10)),
+      ),
+      h('div', { class: 'pip-bottom' }, pip.time, seek),
+    ),
+  );
+  doc.body.replaceChildren(pip.root);
+  moveMedia(() => pip.root.prepend(media));
+  media.controls = false;
+  media.onclick = media.ondblclick = null;
+  player.captions = pip.captions;
+  applyCaptionStyle();
+  renderCaptions();
+  const fit = () => media.videoWidth && api.pip.fit(media.videoWidth / media.videoHeight);
+  fit();
+  media.addEventListener('loadedmetadata', fit, { once: true });
+  updatePip();
+}
+
+function updatePip() {
+  if (!pip?.ctl || !player) return;
+  const { media } = player;
+  const duration = Number.isFinite(media.duration) ? media.duration : 0;
+  pip.bar.style.transform = `scaleX(${duration ? media.currentTime / duration : 0})`;
+  pip.time.textContent = `${formatDuration(media.currentTime)} / ${formatDuration(duration)}`;
+  setCtl(pip.ctl.play, media.paused ? 'play' : 'pause', media.paused ? 'Play' : 'Pause');
+  pip.root.classList.toggle('paused', media.paused);
+}
+
+// Brings the video back into the app. pause: the PiP window was closed;
+// focus: "Back to Decant" also brings the app to the front.
+function leavePip({ pause = false, focus = false } = {}) {
+  if (!pip) return;
+  const { win } = pip;
+  pip = null;
+  if (player && player.media.ownerDocument !== document) {
+    if (pause) player.media.pause();
+    moveMedia(() => (player.mini ? minimizePlayer() : expandPlayer()));
+  }
+  if (!win.closed) win.close();
+  if (focus) api.focusWindow();
+}
+
+// Closes the window without bringing the video back (the player is stopping).
+function closePip() {
+  const { win } = pip;
+  pip = null;
+  if (!win.closed) win.close();
+}
+
+// The app went to the background (another app in front, or minimized) while
+// a video plays: it goes on in the PiP window.
+function autoPip() {
+  if (pip || document.hasFocus() || state.dialog || state.settings.autoPip === false) return;
+  if (!player || player.item.kind === 'audio' || player.media.paused) return;
+  enterPip();
 }
 
 // The mini player, then the library behind it.
@@ -1739,6 +1920,17 @@ function renderMenu(name) {
         { label: 'Speed', value: speedLabel(media.playbackRate), go: 'speed' },
         tracks.length ? { label: 'Subtitles', value: player.track ? player.track.label : 'Off', go: 'subtitles' } : null,
         tracks.length ? { label: 'Subtitle style', go: 'style' } : null,
+        player.item.kind !== 'audio'
+          ? {
+              label: 'Auto picture-in-picture',
+              value: state.settings.autoPip === false ? 'Off' : 'On',
+              stay: true,
+              pick: () => {
+                state.settings.autoPip = state.settings.autoPip === false;
+                api.settings.set({ autoPip: state.settings.autoPip });
+              },
+            }
+          : null,
         { label: 'Keyboard shortcuts', value: '?', pick: () => toggleHelp(true) },
       ].filter(Boolean),
     },
@@ -1853,7 +2045,7 @@ function minimizePlayer() {
       },
       player.miniBar,
     ),
-    h('div', { class: 'mini-art', onclick: expand }, item.kind === 'audio' ? thumb(coverUrl(item)) : null, media),
+    h('div', { class: 'mini-art', onclick: expand }, item.kind === 'audio' ? thumb(coverUrl(item)) : null, pip ? h('div', { class: 'mini-pip' }, icon('pip')) : media),
     h('div', { class: 'mini-text', onclick: expand }, h('div', { class: 'mini-title' }, item.title), player.miniSub),
     h('div', { class: 'row-actions' }, player.toggle, iconButton('expand', 'Open player', expand), iconButton('close', 'Stop', stopPlayer)),
   );
@@ -1865,11 +2057,11 @@ function minimizePlayer() {
   updateTime();
 }
 
-function stopPlayer() {
+function stopPlayer({ keepPip = false } = {}) {
   if (!player) return;
   const { media, save, listeners } = player;
   if (document.fullscreenElement) document.exitFullscreen();
-  if (document.pictureInPictureElement === media) document.exitPictureInPicture();
+  if (pip && !keepPip) closePip();
   if (media.currentTime && !media.ended) save();
   listeners.abort();
   clearTimeout(player.idleTimer);
@@ -2064,6 +2256,8 @@ async function init() {
   setupMediaKeys();
   window.addEventListener('beforeunload', () => player && player.save());
   window.addEventListener('resize', () => player && updateTime());
+  window.addEventListener('blur', () => setTimeout(autoPip, 200));
+  window.addEventListener('focus', () => pip && !pip.manual && leavePip());
   document.addEventListener('fullscreenchange', () => {
     if (!player || player.mini) return;
     updateControls();

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, protocol } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, protocol, screen } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -15,7 +15,9 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 const DAY = 24 * 60 * 60 * 1000;
+const PIP_NAME = 'decant-pip';
 let win = null;
+let pipWin = null;
 
 function outputDir() {
   const dir = settings.get().outputDir;
@@ -300,12 +302,79 @@ function registerIpc() {
 
   ipcMain.handle('clipboard:read', () => clipboard.readText());
 
+  ipcMain.handle('pip:fit', (_e, ratio) => fitPip(ratio));
+  ipcMain.handle('window:focus', () => {
+    if (!win || win.isDestroyed()) return;
+    if (win.isMinimized()) win.restore();
+    win.show();
+    if (process.platform === 'darwin') app.focus({ steal: true });
+    win.focus();
+  });
+
   ipcMain.handle('engine:version', () => binaries.version().catch(() => null));
   ipcMain.handle('engine:update', async () => {
     const version = await binaries.update();
     settings.set({ lastEngineUpdate: Date.now() });
     return version;
   });
+}
+
+// The picture-in-picture window: a small frameless window the player opens
+// with window.open() and moves its video into. It floats above other apps
+// (full-screen ones too on a Mac) without taking the focus from them.
+function pipBounds() {
+  const saved = settings.get().pipBounds;
+  const onScreen = (b) =>
+    screen.getAllDisplays().some(({ workArea: a }) => b.x < a.x + a.width && b.x + b.width > a.x && b.y < a.y + a.height && b.y + b.height > a.y);
+  if (saved && onScreen(saved)) return saved;
+  const area = screen.getPrimaryDisplay().workArea;
+  const width = 400;
+  const height = 225;
+  return { width, height, x: area.x + area.width - width - 24, y: area.y + area.height - height - 24 };
+}
+
+function pipOptions() {
+  return {
+    ...pipBounds(),
+    title: 'Decant',
+    frame: false,
+    show: false,
+    resizable: true,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    minWidth: 200,
+    minHeight: 112,
+    backgroundColor: '#000000',
+    // A non-activating panel on macOS: on every Space, over full-screen apps.
+    type: process.platform === 'darwin' ? 'panel' : 'toolbar',
+  };
+}
+
+function setupPip(child) {
+  pipWin = child;
+  child.setAlwaysOnTop(true, 'floating');
+  if (process.platform === 'darwin') child.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  child.showInactive();
+  const remember = () => !child.isDestroyed() && settings.set({ pipBounds: child.getBounds() });
+  child.on('moved', remember);
+  child.on('resized', remember);
+  child.on('closed', () => {
+    if (pipWin === child) pipWin = null;
+  });
+}
+
+// Fits the window to the video: same long side, bottom-right corner kept.
+function fitPip(ratio) {
+  if (!pipWin || pipWin.isDestroyed() || !(ratio > 0)) return;
+  const b = pipWin.getBounds();
+  const long = Math.max(b.width, b.height);
+  const width = Math.round(ratio >= 1 ? long : long * ratio);
+  const height = Math.round(ratio >= 1 ? long / ratio : long);
+  pipWin.setAspectRatio(ratio);
+  pipWin.setBounds({ x: b.x + b.width - width, y: b.y + b.height - height, width, height });
 }
 
 function createWindow() {
@@ -326,10 +395,15 @@ function createWindow() {
     },
   });
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
-  win.webContents.setWindowOpenHandler(({ url }) => {
+  win.webContents.setWindowOpenHandler(({ url, frameName }) => {
+    if (frameName === PIP_NAME && url === 'about:blank') return { action: 'allow', overrideBrowserWindowOptions: pipOptions() };
     if (/^https?:\/\//.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
+  win.webContents.on('did-create-window', (child, { frameName }) => {
+    if (frameName === PIP_NAME) setupPip(child);
+  });
+  win.on('closed', () => pipWin && !pipWin.isDestroyed() && pipWin.close());
 }
 
 app.whenReady().then(() => {
