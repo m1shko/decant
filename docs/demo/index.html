@@ -15,6 +15,7 @@
       </div>
       <nav class="tabs" role="tablist">
         <button role="tab" data-tab="download" aria-selected="true">Download</button>
+        <button role="tab" data-tab="library" aria-selected="false">Library <span id="library-count" class="count"></span></button>
         <button role="tab" data-tab="history" aria-selected="false">History <span id="history-count" class="count"></span></button>
       </nav>
     </header>
@@ -54,6 +55,18 @@
           <p id="queue-empty" class="empty">Nothing here yet. Paste a link to get started.</p>
         </section>
       </section>
+
+      <section id="tab-library" class="tab wide" hidden>
+        <div class="library-head">
+          <div id="library-filter" class="segmented"></div>
+          <input id="library-search" type="search" spellcheck="false" placeholder="Search your library" aria-label="Search your library" />
+        </div>
+        <ul id="library-grid" class="grid"></ul>
+        <p id="library-empty" class="empty"></p>
+        <p id="library-usage" class="hint"></p>
+      </section>
+
+      <section id="player" class="player" hidden></section>
 
       <section id="tab-history" class="tab" hidden>
         <div class="section-head">

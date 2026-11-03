@@ -56,14 +56,15 @@ function downloadArgs(job, env) {
     job.outputDir,
   ];
 
-  let name = '%(title).150B';
+  // Library items live in a folder of their own, so the file name does not matter.
+  let name = job.library ? 'media' : '%(title).150B';
   const trim = job.trim;
   if (trim) {
     const start = parseTime(trim.start) ?? 0;
     const end = parseTime(trim.end);
     const range = `${start}-${end ?? 'inf'}`;
     args.push('--download-sections', `*${range}`, '--force-keyframes-at-cuts');
-    name += ` (${formatTime(start).replace(/:/g, '.')}-${end == null ? 'end' : formatTime(end).replace(/:/g, '.')})`;
+    if (!job.library) name += ` (${formatTime(start).replace(/:/g, '.')}-${end == null ? 'end' : formatTime(end).replace(/:/g, '.')})`;
   }
   args.push('--output', `${name}.%(ext)s`);
 
@@ -79,9 +80,10 @@ function downloadArgs(job, env) {
     args.push('--format', 'bv*+ba/b', '--format-sort', sort.join(','), '--merge-output-format', 'mp4');
   }
 
-  if (job.format !== 'wav') {
-    args.push('--embed-metadata', '--embed-thumbnail', '--convert-thumbnails', 'jpg');
-  }
+  if (job.format !== 'wav') args.push('--embed-metadata', '--embed-thumbnail');
+  if (job.format !== 'wav' || job.library) args.push('--convert-thumbnails', 'jpg');
+  // The library shows its own copy of the cover, so it works offline.
+  if (job.library) args.push('--write-thumbnail', '--output', 'thumbnail:cover.%(ext)s');
   args.push('--', job.url);
   return args;
 }

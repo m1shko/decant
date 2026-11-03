@@ -13,6 +13,9 @@ const state = {
   probedInput: null,
   jobs: new Map(),
   history: [],
+  library: [],
+  libraryFilter: 'all',
+  librarySearch: '',
   lastClipboard: null,
 };
 
@@ -40,6 +43,9 @@ const ICONS = {
   retry: 'M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4',
   trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3',
   download: 'M12 4v11M7 10l5 5 5-5M5 20h14',
+  library: 'M3 6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM10 9v6l5-3z',
+  export: 'M12 15V4M7 9l5-5 5 5M5 20h14',
+  back: 'M15 5l-7 7 7 7',
 };
 
 function icon(name) {
@@ -294,16 +300,19 @@ function jobOptions(info) {
 
 function updateDownloadButton() {
   const btn = $('#download-btn');
+  const libraryBtn = $('#library-btn');
   if (!btn) return;
   const info = state.info;
   if (info.type === 'video') {
     const trim = trimValue();
-    btn.disabled = trim === undefined;
+    btn.disabled = libraryBtn.disabled = trim === undefined;
     btn.lastChild.textContent = `Download · ${formatLabel(jobOptions(info))}`;
+    libraryBtn.lastChild.textContent = 'Save to library';
   } else {
     const count = state.selected.size;
-    btn.disabled = count === 0;
+    btn.disabled = libraryBtn.disabled = count === 0;
     btn.lastChild.textContent = `Add ${count} item${count === 1 ? '' : 's'} · ${formatLabel(jobOptions(info))}`;
+    libraryBtn.lastChild.textContent = `Save ${count} to library`;
   }
 }
 
@@ -342,7 +351,8 @@ function renderPreview() {
     h(
       'div',
       { class: 'card-actions' },
-      h('button', { class: 'btn large primary', id: 'download-btn', onclick: enqueue }, icon('download'), h('span', {}, '')),
+      h('button', { class: 'btn large', id: 'library-btn', onclick: () => enqueue({ library: true }) }, icon('library'), h('span', {}, '')),
+      h('button', { class: 'btn large primary', id: 'download-btn', onclick: () => enqueue() }, icon('download'), h('span', {}, '')),
     ),
   );
   root.replaceChildren(card);
@@ -413,24 +423,27 @@ function renderSearch(info) {
   );
 }
 
-async function enqueue() {
+async function enqueue({ library = false } = {}) {
   const info = state.info;
-  const opts = jobOptions(info);
+  const opts = { ...jobOptions(info), library };
   let specs;
   if (info.type === 'video') {
     const trim = trimValue();
     if (trim === undefined) return;
-    specs = [{ ...opts, url: info.url || state.probedInput, title: info.title, thumbnail: info.thumbnail, trim }];
+    specs = [
+      { ...opts, url: info.url || state.probedInput, title: info.title, uploader: info.uploader, duration: info.duration, thumbnail: info.thumbnail, trim },
+    ];
   } else {
     specs = info.entries
       .filter((_, i) => state.selected.has(i))
-      .map((e) => ({ ...opts, url: e.url, title: e.title, thumbnail: e.thumbnail, trim: null }));
+      .map((e) => ({ ...opts, url: e.url, title: e.title, uploader: e.uploader, duration: e.duration, thumbnail: e.thumbnail, trim: null }));
   }
   await api.queue.add(specs);
   state.info = null;
   $('#url-input').value = '';
   renderPreview();
-  notice(specs.length > 1 ? `${specs.length} items added to the queue.` : '');
+  if (library) notice(specs.length > 1 ? `${specs.length} items will show up in your library once downloaded.` : 'It will show up in your library once downloaded.');
+  else notice(specs.length > 1 ? `${specs.length} items added to the queue.` : '');
   $('#url-input').focus();
 }
 
@@ -462,7 +475,9 @@ function jobStatus(job) {
 function renderJob(job) {
   const active = ['queued', 'downloading', 'processing'].includes(job.status);
   const actions = [];
-  if (job.status === 'done') {
+  if (job.status === 'done' && job.library) {
+    actions.push(iconButton('play', 'Play', () => playById(job.libraryId)));
+  } else if (job.status === 'done') {
     actions.push(iconButton('play', 'Open', () => api.file.open(job.filePath)));
     actions.push(iconButton('folder', 'Show in folder', () => api.file.reveal(job.filePath)));
   }
@@ -485,6 +500,7 @@ function renderJob(job) {
         'div',
         { class: 'row-sub' },
         h('span', { class: 'tag' }, formatLabel(job)),
+        job.library ? h('span', { class: 'tag accent' }, 'Library') : null,
         job.trim ? h('span', {}, `${formatDuration(Number(job.trim.start))} → ${job.trim.end ? formatDuration(Number(job.trim.end)) : 'end'}`) : null,
         h('span', { class: 'status' }, jobStatus(job)),
       ),
@@ -516,6 +532,200 @@ function updateJob(job) {
   if (had && row) row.replaceWith(renderJob(job));
   else renderQueue();
   $('#queue-clear').hidden = ![...state.jobs.values()].some((j) => ['done', 'error', 'canceled'].includes(j.status));
+}
+
+// --- Library ----------------------------------------------------------------
+
+const mediaUrl = (item) => `decant-media://${item.id}/media`;
+const coverUrl = (item) => (item.cover ? `decant-media://${item.id}/cover` : item.thumbnail);
+
+function libraryItems() {
+  const query = state.librarySearch.trim().toLowerCase();
+  return state.library.filter(
+    (item) =>
+      (state.libraryFilter === 'all' || item.kind === state.libraryFilter) &&
+      (!query || `${item.title} ${item.uploader || ''}`.toLowerCase().includes(query)),
+  );
+}
+
+function renderTile(item) {
+  const progress = item.duration && item.position ? Math.min(100, (item.position / item.duration) * 100) : 0;
+  const stop = (fn) => (e) => {
+    e.stopPropagation();
+    fn();
+  };
+  return h(
+    'li',
+    { class: 'tile', title: item.title, onclick: () => openPlayer(item) },
+    h(
+      'div',
+      { class: 'tile-art' },
+      thumb(coverUrl(item)),
+      h('span', { class: 'tile-play' }, icon('play')),
+      item.duration ? h('span', { class: 'badge' }, formatDuration(item.duration)) : null,
+      progress ? h('div', { class: 'tile-progress' }, h('div', { style: `width: ${progress}%` })) : null,
+    ),
+    h(
+      'div',
+      { class: 'tile-body' },
+      h(
+        'div',
+        { class: 'tile-text' },
+        h('div', { class: 'tile-title' }, item.title),
+        h('div', { class: 'row-sub' }, h('span', { class: 'tag' }, item.kind === 'audio' ? 'Audio' : 'Video'), item.uploader ? h('span', {}, item.uploader) : null),
+      ),
+      h(
+        'div',
+        { class: 'tile-actions' },
+        iconButton('export', 'Save a copy…', stop(() => api.library.export(item.id))),
+        iconButton(
+          'trash',
+          'Remove from library',
+          stop(async () => {
+            if (!confirm(`Remove “${item.title}” from your library? The file will be deleted.`)) return;
+            state.library = await api.library.remove(item.id);
+            renderLibrary();
+          }),
+        ),
+      ),
+    ),
+  );
+}
+
+function renderLibrary() {
+  const all = state.library;
+  $('#library-count').textContent = all.length ? all.length : '';
+  $('#library-filter').replaceChildren(
+    segmented(
+      [
+        ['all', 'All'],
+        ['video', 'Videos'],
+        ['audio', 'Audio'],
+      ],
+      state.libraryFilter,
+      (filter) => {
+        state.libraryFilter = filter;
+        renderLibrary();
+      },
+    ),
+  );
+  const items = libraryItems();
+  $('#library-grid').replaceChildren(...items.map(renderTile));
+  const empty = $('#library-empty');
+  empty.hidden = items.length > 0;
+  if (all.length && !items.length) empty.textContent = 'Nothing matches.';
+  else empty.textContent = 'Your library is empty. Choose “Save to library” on a video to watch it here, even offline.';
+  const size = all.reduce((total, i) => total + (i.size || 0), 0);
+  $('#library-usage').textContent = all.length ? `${all.length} item${all.length === 1 ? '' : 's'} · ${formatBytes(size)} on this computer` : '';
+}
+
+// --- Player -----------------------------------------------------------------
+
+let player = null;
+
+function playById(id) {
+  const item = state.library.find((i) => i.id === id);
+  if (item) openPlayer(item);
+}
+
+function openPlayer(item) {
+  closePlayer();
+  const audio = item.kind === 'audio';
+  const media = h(audio ? 'audio' : 'video', {
+    class: 'player-media',
+    src: mediaUrl(item),
+    poster: audio ? null : coverUrl(item),
+    controls: true,
+    autoplay: true,
+    preload: 'auto',
+  });
+  let lastSave = 0;
+  const save = (position = media.currentTime) => {
+    lastSave = Date.now();
+    const duration = Number.isFinite(media.duration) ? media.duration : undefined;
+    Object.assign(item, { position, ...(duration ? { duration } : {}) });
+    api.library.progress(item.id, { position, duration });
+  };
+  // Picks up where it was left, unless that was the very end.
+  media.addEventListener('loadedmetadata', () => {
+    if (item.position && item.position < media.duration - 5) media.currentTime = item.position;
+  });
+  media.addEventListener('timeupdate', () => {
+    if (Date.now() - lastSave > 5000) save();
+  });
+  media.addEventListener('pause', () => save());
+  media.addEventListener('ended', () => save(0));
+  media.addEventListener('error', () => {
+    stage.replaceChildren(h('div', { class: 'player-error' }, 'This file can’t be played. It may have been deleted or use a format the player doesn’t support.'));
+  });
+
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.metadata = new MediaMetadata({ title: item.title, artist: item.uploader || '' });
+  }
+
+  const stage = h(
+    'div',
+    { class: `player-stage${audio ? ' audio' : ''}` },
+    audio ? h('img', { class: 'player-cover', src: coverUrl(item), alt: '', referrerpolicy: 'no-referrer' }) : null,
+    media,
+  );
+  $('#player').replaceChildren(
+    h('button', { class: 'link player-back', onclick: closePlayer }, icon('back'), 'Library'),
+    stage,
+    h(
+      'div',
+      { class: 'player-info' },
+      h(
+        'div',
+        { class: 'media-text' },
+        h('div', { class: 'player-title' }, item.title),
+        h('div', { class: 'muted' }, [item.uploader, formatLabel(item)].filter(Boolean).join(' · ')),
+      ),
+      h(
+        'div',
+        { class: 'row-actions' },
+        iconButton('export', 'Save a copy…', () => api.library.export(item.id)),
+        item.url ? h('button', { class: 'btn small', onclick: () => api.openLink(item.url) }, 'Open original') : null,
+      ),
+    ),
+  );
+  player = { item, media, save };
+  for (const tab of document.querySelectorAll('.tab')) tab.hidden = true;
+  $('#player').hidden = false;
+  for (const btn of document.querySelectorAll('.tabs button')) btn.setAttribute('aria-selected', String(btn.dataset.tab === 'library'));
+  $('main').scrollTop = 0;
+  media.focus();
+}
+
+function closePlayer() {
+  if (!player) return;
+  const { media, save } = player;
+  if (media.currentTime && !media.ended) save();
+  media.pause();
+  media.removeAttribute('src');
+  media.load();
+  player = null;
+  if ('mediaSession' in navigator) navigator.mediaSession.metadata = null;
+  $('#player').replaceChildren();
+  $('#player').hidden = true;
+  selectTab('library');
+}
+
+function onPlayerKey(e) {
+  if (!player || e.metaKey || e.ctrlKey || e.altKey || e.target.matches('input, select, textarea')) return;
+  const { media } = player;
+  // The focused player handles space and arrows itself.
+  const own = e.target === media;
+  if (e.key === 'Escape' && !document.fullscreenElement) closePlayer();
+  else if ((e.key === ' ' && !own) || e.key === 'k') media.paused ? media.play() : media.pause();
+  else if (e.key === 'ArrowLeft' && !own) media.currentTime -= 5;
+  else if (e.key === 'ArrowRight' && !own) media.currentTime += 5;
+  else if (e.key === 'j') media.currentTime -= 10;
+  else if (e.key === 'l') media.currentTime += 10;
+  else if (e.key === 'f' && media.tagName === 'VIDEO') document.fullscreenElement ? document.exitFullscreen() : media.requestFullscreen();
+  else if (e.key === 'm') media.muted = !media.muted;
+  else return;
+  e.preventDefault();
 }
 
 // --- History ----------------------------------------------------------------
@@ -567,10 +777,13 @@ async function renderHistory() {
 // --- Tabs, destination, footer ----------------------------------------------
 
 function selectTab(name) {
+  if (player) closePlayer();
   for (const btn of document.querySelectorAll('.tabs button')) btn.setAttribute('aria-selected', String(btn.dataset.tab === name));
   $('#tab-download').hidden = name !== 'download';
+  $('#tab-library').hidden = name !== 'library';
   $('#tab-history').hidden = name !== 'history';
   if (name === 'history') renderHistory();
+  if (name === 'library') renderLibrary();
 }
 
 function renderDestination() {
@@ -584,7 +797,8 @@ function renderDestination() {
 
 async function pasteFromClipboard() {
   const text = (await api.readClipboard()).trim();
-  if (!text || text === state.lastClipboard || !AUTO_PASTE.test(text)) return;
+  // Never interrupt something playing: the link is picked up after.
+  if (!text || text === state.lastClipboard || !AUTO_PASTE.test(text) || player) return;
   state.lastClipboard = text;
   const input = $('#url-input');
   if (input.value.trim() === text || state.probedInput === text) return;
@@ -609,6 +823,19 @@ async function init() {
     state.jobs.delete(id);
     renderQueue();
   });
+
+  state.library = await api.library.list();
+  renderLibrary();
+  api.library.onUpdate((items) => {
+    state.library = items;
+    if (!player) renderLibrary();
+  });
+  $('#library-search').addEventListener('input', (e) => {
+    state.librarySearch = e.target.value;
+    renderLibrary();
+  });
+  document.addEventListener('keydown', onPlayerKey);
+  window.addEventListener('beforeunload', () => player && player.save());
 
   state.history = await api.history.list();
   renderHistory();
