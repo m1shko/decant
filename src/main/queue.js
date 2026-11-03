@@ -122,7 +122,8 @@ class Queue extends EventEmitter {
       }
       const info = ytdlp.parseInfoLine(line);
       if (info) {
-        Object.assign(job, info);
+        // Keeps what the link already told us when yt-dlp has nothing better.
+        for (const [key, value] of Object.entries(info)) if (value != null) job[key] = value;
         return;
       }
       const file = ytdlp.parseFileLine(line);

@@ -89,7 +89,7 @@ function downloadArgs(job, env) {
   // not fail the download (--ignore-errors still exits non-zero if the video fails).
   if (job.library) {
     args.push('--write-thumbnail', '--output', 'thumbnail:cover.%(ext)s');
-    args.push('--print', `after_move:${INFO_PREFIX}%(.{chapters,description})j`);
+    args.push('--print', `after_move:${INFO_PREFIX}%(.{id,extractor_key,duration,chapters,description})j`);
     if (job.kind === 'video' && !job.trim && job.subtitles?.length) {
       args.push(
         '--ignore-errors',
@@ -147,7 +147,12 @@ function toChapters(chapters) {
     .map((c, i) => ({ start: c.start_time, end: c.end_time ?? null, title: c.title || `Chapter ${i + 1}` }));
 }
 
-// The info line printed for library downloads -> { chapters, description }.
+// Identifies a video (or playlist) across links: "Youtube:dQw4w9WgXcQ".
+function mediaKey(extractor, id) {
+  return extractor && id ? `${extractor}:${id}` : null;
+}
+
+// The info line printed for library downloads -> { key, duration, chapters, description }.
 // Returns undefined for any other line.
 function parseInfoLine(line) {
   if (!line.startsWith(INFO_PREFIX)) return undefined;
@@ -157,7 +162,12 @@ function parseInfoLine(line) {
   } catch {
     info = null;
   }
-  return { chapters: toChapters(info?.chapters), description: typeof info?.description === 'string' ? info.description : '' };
+  return {
+    key: mediaKey(info?.extractor_key, info?.id),
+    duration: Number.isFinite(info?.duration) ? info.duration : null,
+    chapters: toChapters(info?.chapters),
+    description: typeof info?.description === 'string' ? info.description : '',
+  };
 }
 
 // Lines yt-dlp prints while ffmpeg converts, merges or tags the file.
@@ -214,6 +224,7 @@ function reaches([w, h], step) {
 function summarizeInfo(info) {
   if (info._type === 'playlist') {
     const entries = (info.entries || []).filter(Boolean).map((e) => ({
+      key: mediaKey(e.ie_key || e.extractor_key, e.id),
       url: entryUrl(e),
       title: e.title || e.id,
       duration: e.duration ?? null,
@@ -222,6 +233,7 @@ function summarizeInfo(info) {
     }));
     return {
       type: 'playlist',
+      key: mediaKey(info.extractor_key || info.ie_key, info.id),
       title: info.title || 'Playlist',
       uploader: info.uploader || info.channel || null,
       source: info.extractor_key || info.ie_key || null,
@@ -233,6 +245,7 @@ function summarizeInfo(info) {
     .map((f) => [f.width || f.height, f.height || f.width]);
   return {
     type: 'video',
+    key: mediaKey(info.extractor_key, info.id),
     url: info.webpage_url || info.original_url,
     title: info.title || info.id,
     uploader: info.uploader || info.channel || info.creator || null,

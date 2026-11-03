@@ -2,6 +2,7 @@
 const { app } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 
 // The app used to be called Siphon: carry its settings and history over.
 const oldDir = path.join(app.getPath('appData'), 'Siphon');
@@ -80,13 +81,24 @@ const history = {
 
 // Videos and songs saved inside the app: each one gets its own folder in
 // Library/ holding the media file and its cover, so they play offline.
+// Playlists only point at items: a video in two playlists is stored once.
 const LIBRARY_DIR = path.join(app.getPath('userData'), 'Library');
-const libraryFile = jsonFile('library.json', { items: [] });
+const libraryFile = jsonFile('library.json', { items: [], playlists: [] });
+
+// Whether two downloads are the same media: same video (by id, or by link
+// for items saved before ids were kept), same kind, and neither is a clip.
+function sameMedia(a, b) {
+  if (a.kind !== b.kind || a.trim || b.trim) return false;
+  return Boolean((a.key && a.key === b.key) || (a.url && a.url === b.url));
+}
 
 const library = {
   dir: (id) => path.join(LIBRARY_DIR, id),
   list: () => libraryFile.get().items,
+  playlists: () => libraryFile.get().playlists,
+  snapshot: () => ({ items: library.list(), playlists: library.playlists() }),
   get: (id) => libraryFile.get().items.find((i) => i.id === id),
+  find: (spec) => library.list().find((i) => sameMedia(i, spec)),
   add(entry) {
     libraryFile.set({ items: [entry, ...libraryFile.get().items] });
   },
@@ -94,10 +106,43 @@ const library = {
     libraryFile.set({ items: libraryFile.get().items.map((i) => (i.id === id ? { ...i, ...patch } : i)) });
   },
   remove(id) {
-    libraryFile.set({ items: libraryFile.get().items.filter((i) => i.id !== id) });
+    const { items, playlists } = libraryFile.get();
+    libraryFile.set({
+      items: items.filter((i) => i.id !== id),
+      playlists: playlists.map((p) => ({ ...p, entries: p.entries.filter((e) => e.id !== id) })),
+    });
     fs.rm(library.dir(id), { recursive: true, force: true }, () => {});
   },
-  // Deletes folders left by downloads that never finished.
+  // The playlist saved from this source (same key), created if new.
+  savePlaylist({ key, title, uploader, url, thumbnail }) {
+    const playlists = libraryFile.get().playlists;
+    const found = key && playlists.find((p) => p.key === key);
+    if (found) {
+      Object.assign(found, { title, uploader, url, thumbnail: thumbnail || found.thumbnail });
+      libraryFile.set({ playlists });
+      return found;
+    }
+    const playlist = { id: crypto.randomUUID(), key, title, uploader, url, thumbnail, date: Date.now(), entries: [] };
+    libraryFile.set({ playlists: [playlist, ...playlists] });
+    return playlist;
+  },
+  // Entries keep the order of the source playlist.
+  addToPlaylist(playlistId, id, index) {
+    const playlists = libraryFile.get().playlists;
+    const playlist = playlists.find((p) => p.id === playlistId);
+    if (!playlist || playlist.entries.some((e) => e.id === id)) return;
+    playlist.entries = [...playlist.entries, { id, index }].sort((a, b) => a.index - b.index);
+    libraryFile.set({ playlists });
+  },
+  removeFromPlaylist(playlistId, id) {
+    const playlists = libraryFile.get().playlists.map((p) => (p.id === playlistId ? { ...p, entries: p.entries.filter((e) => e.id !== id) } : p));
+    libraryFile.set({ playlists });
+  },
+  removePlaylist(playlistId) {
+    libraryFile.set({ playlists: libraryFile.get().playlists.filter((p) => p.id !== playlistId) });
+  },
+  // At startup: deletes folders left by downloads that never finished, and
+  // drops them from playlists (and playlists left empty).
   prune() {
     let names = [];
     try {
@@ -106,8 +151,13 @@ const library = {
     for (const name of names) {
       if (!library.get(name)) fs.rm(library.dir(name), { recursive: true, force: true }, () => {});
     }
+    const playlists = libraryFile
+      .get()
+      .playlists.map((p) => ({ ...p, entries: p.entries.filter((e) => library.get(e.id)) }))
+      .filter((p) => p.entries.length);
+    libraryFile.set({ playlists });
   },
   flush: () => libraryFile.flush(),
 };
 
-module.exports = { settings, history, library };
+module.exports = { settings, history, library, sameMedia };
