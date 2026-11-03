@@ -31,7 +31,7 @@ const shots = [
 ];
 
 for (const [scene, theme] of shots) {
-  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'siphon-shot-'));
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'decant-shot-'));
   const url = `${pathToFileURL(path.join(demoDir, 'index.html'))}?scene=${scene}`;
   const file = path.join(outDir, `${scene}-${theme}.png`);
   execFileSync(chrome, [

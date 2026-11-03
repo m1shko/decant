@@ -51,12 +51,12 @@ test('cookies are passed through', () => {
 });
 
 test('progress line parsing', () => {
-  const p = y.parseProgressLine('[siphon] 500|1000|NA|2048.5|3|avc1.640028');
+  const p = y.parseProgressLine('[decant] 500|1000|NA|2048.5|3|avc1.640028');
   assert.equal(p.percent, 50);
   assert.equal(p.speed, 2048.5);
   assert.equal(p.eta, 3);
   assert.equal(p.audioOnly, false);
-  const est = y.parseProgressLine('[siphon] 250|NA|1000|NA|NA|none');
+  const est = y.parseProgressLine('[decant] 250|NA|1000|NA|NA|none');
   assert.equal(est.percent, 25);
   assert.equal(est.audioOnly, true);
   assert.equal(y.parseProgressLine('[download] Destination: x'), null);

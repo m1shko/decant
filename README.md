@@ -1,14 +1,14 @@
 <div align="center">
 
-<img src="build/icon.png" width="128" height="128" alt="Siphon" />
+<img src="build/icon.png" width="128" height="128" alt="Decant" />
 
-# Siphon
+# Decant
 
 **Paste a link, pick audio or video, done.**
 Download from YouTube, Instagram, TikTok and 1,000+ other sites — on Mac and Windows. No ads, no account, no limits.
 
-[![Build](https://github.com/m1shko/siphon/actions/workflows/build.yml/badge.svg)](https://github.com/m1shko/siphon/actions/workflows/build.yml)
-[![Latest release](https://img.shields.io/github/v/release/m1shko/siphon?label=release&color=6d4aff)](https://github.com/m1shko/siphon/releases/latest)
+[![Build](https://github.com/m1shko/decant/actions/workflows/build.yml/badge.svg)](https://github.com/m1shko/decant/actions/workflows/build.yml)
+[![Latest release](https://img.shields.io/github/v/release/m1shko/decant?label=release&color=6d4aff)](https://github.com/m1shko/decant/releases/latest)
 ![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey)
 [![MIT license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -16,7 +16,7 @@ Download from YouTube, Instagram, TikTok and 1,000+ other sites — on Mac and W
 
 <br />
 
-<img src="docs/screenshots/audio-dark.png" width="760" alt="Siphon with a YouTube link ready to download as a 320 kbps MP3" />
+<img src="docs/screenshots/audio-dark.png" width="760" alt="Decant with a YouTube link ready to download as a 320 kbps MP3" />
 
 </div>
 
@@ -30,8 +30,8 @@ Download from YouTube, Instagram, TikTok and 1,000+ other sites — on Mac and W
 | 📃 **Playlists**         | Tick the items you want, they go straight to the queue                                                 |
 | ⏬ **Queue**             | Line up as many downloads as you like, two run at once, with speed and time left                       |
 | 🖼️ **Cover art & tags**  | Title, artist and thumbnail embedded in the file, so your music library stays tidy                     |
-| 📋 **Auto-paste**        | Copy a link in your browser, switch to Siphon: it is already loaded. Drag and drop works too           |
-| 🔎 **Search**            | No link? Type a few words and Siphon searches YouTube                                                  |
+| 📋 **Auto-paste**        | Copy a link in your browser, switch to Decant: it is already loaded. Drag and drop works too           |
+| 🔎 **Search**            | No link? Type a few words and Decant searches YouTube                                                  |
 | 🕘 **History**           | Find, open or re-download anything you got before                                                      |
 | 🍪 **Browser cookies**   | Uses your browser session for Instagram, private or age-restricted videos                              |
 | 🔄 **Always up to date** | The download engine updates itself daily, because sites change all the time                           |
@@ -43,24 +43,24 @@ Download from YouTube, Instagram, TikTok and 1,000+ other sites — on Mac and W
 
 ## 📦 Install
 
-Head to [**Releases**](https://github.com/m1shko/siphon/releases/latest) and grab the file for your computer:
+Head to [**Releases**](https://github.com/m1shko/decant/releases/latest) and grab the file for your computer:
 
 | System                               | File                            |
 | ------------------------------------ | ------------------------------- |
-| macOS (Apple Silicon: M1, M2, M3…)    | `Siphon-x.y.z-arm64.dmg`        |
-| Windows 10 / 11 (installer)           | `Siphon.Setup.x.y.z.exe`        |
-| Windows (portable, no install)        | `Siphon.x.y.z.exe`              |
+| macOS (Apple Silicon: M1, M2, M3…)    | `Decant-x.y.z-arm64.dmg`        |
+| Windows 10 / 11 (installer)           | `Decant.Setup.x.y.z.exe`        |
+| Windows (portable, no install)        | `Decant.x.y.z.exe`              |
 
-Nothing else to install: everything Siphon needs is bundled.
+Nothing else to install: everything Decant needs is bundled.
 
 > [!NOTE]
-> **First launch on macOS:** go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to Siphon.
+> **First launch on macOS:** go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to Decant.
 >
 > **On Windows:** click **More info → Run anyway** on the SmartScreen window.
 
 ## 🚀 How to use it
 
-1. **Copy a link** (YouTube video, Instagram Reel, TikTok, playlist…) and paste it into Siphon. If Siphon is already open, the link shows up by itself.
+1. **Copy a link** (YouTube video, Instagram Reel, TikTok, playlist…) and paste it into Decant. If Decant is already open, the link shows up by itself.
 2. **Choose** *Audio* or *Video*, then the format and quality. Tick *Only part of it* to keep just a clip.
 3. **Click Download.** The file lands in your *Downloads* folder (switch it with the **Change** button right under the preview).
 
@@ -69,21 +69,21 @@ Nothing else to install: everything Siphon needs is bundled.
 <details>
 <summary><b>Which sites work?</b></summary>
 
-YouTube (videos, Shorts, playlists), Instagram (Reels, posts), TikTok, X/Twitter, Facebook, Vimeo, Dailymotion, Twitch, SoundCloud… and [over a thousand more](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md), since Siphon is built on yt-dlp.
+YouTube (videos, Shorts, playlists), Instagram (Reels, posts), TikTok, X/Twitter, Facebook, Vimeo, Dailymotion, Twitch, SoundCloud… and [over a thousand more](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md), since Decant is built on yt-dlp.
 </details>
 
 <details>
 <summary><b>Instagram (or YouTube) asks me to log in</b></summary>
 
-Some content is only visible when you are logged in. At the bottom of the window, set **Cookies** to the browser you are logged in with (Chrome, Firefox, Safari, Edge…). Siphon then uses your session, just as if you were watching in that browser. Nothing is sent anywhere else.
+Some content is only visible when you are logged in. At the bottom of the window, set **Cookies** to the browser you are logged in with (Chrome, Firefox, Safari, Edge…). Decant then uses your session, just as if you were watching in that browser. Nothing is sent anywhere else.
 
-On macOS, Chrome may ask for Keychain access (click *Always Allow*), and Safari needs **Full Disk Access** for Siphon (System Settings → Privacy & Security).
+On macOS, Chrome may ask for Keychain access (click *Always Allow*), and Safari needs **Full Disk Access** for Decant (System Settings → Privacy & Security).
 </details>
 
 <details>
 <summary><b>My 4K video won't open in QuickTime</b></summary>
 
-Above 1080p, YouTube only offers VP9 or AV1. The MP4 plays fine in [VLC](https://www.videolan.org/) or [IINA](https://iina.io/), and in QuickTime on recent Macs. At 1080p and below, Siphon picks H.264, which plays everywhere.
+Above 1080p, YouTube only offers VP9 or AV1. The MP4 plays fine in [VLC](https://www.videolan.org/) or [IINA](https://iina.io/), and in QuickTime on recent Macs. At 1080p and below, Decant picks H.264, which plays everywhere.
 </details>
 
 <details>
@@ -97,22 +97,22 @@ Above 1080p, YouTube only offers VP9 or AV1. The MP4 plays fine in [VLC](https:/
 <details>
 <summary><b>A download fails that used to work</b></summary>
 
-Sites change regularly. Siphon updates its engine once a day, but you can force it with **Update engine** in the bottom right corner. If it still fails, [open an issue](https://github.com/m1shko/siphon/issues) with the link and the error message.
+Sites change regularly. Decant updates its engine once a day, but you can force it with **Update engine** in the bottom right corner. If it still fails, [open an issue](https://github.com/m1shko/decant/issues) with the link and the error message.
 </details>
 
 <details>
 <summary><b>What about Intel Macs or Linux?</b></summary>
 
-There is no ready-made build yet, but Siphon runs from source (see below), and `npm run dist:mac` on an Intel Mac produces an Intel build.
+There is no ready-made build yet, but Decant runs from source (see below), and `npm run dist:mac` on an Intel Mac produces an Intel build.
 </details>
 
 ## 🛠️ Development
 
-Siphon is an [Electron](https://www.electronjs.org/) app that drives [yt-dlp](https://github.com/yt-dlp/yt-dlp) to fetch media and [FFmpeg](https://ffmpeg.org/) to convert it.
+Decant is an [Electron](https://www.electronjs.org/) app that drives [yt-dlp](https://github.com/yt-dlp/yt-dlp) to fetch media and [FFmpeg](https://ffmpeg.org/) to convert it.
 
 ```bash
-git clone https://github.com/m1shko/siphon.git
-cd siphon
+git clone https://github.com/m1shko/decant.git
+cd decant
 npm install   # also fetches yt-dlp, ffmpeg and ffprobe into bin/
 npm start     # run the app
 npm test      # unit tests
@@ -121,8 +121,8 @@ npm test      # unit tests
 Build the app:
 
 ```bash
-npm run dist:mac   # → dist/Siphon-x.y.z-arm64.dmg  (on a Mac)
-npm run dist:win   # → dist/Siphon Setup x.y.z.exe  (on Windows)
+npm run dist:mac   # → dist/Decant-x.y.z-arm64.dmg  (on a Mac)
+npm run dist:win   # → dist/Decant Setup x.y.z.exe  (on Windows)
 ```
 
 Every push to `main` builds both versions with GitHub Actions (*Actions* tab → artifacts). Pushing a `vX.Y.Z` tag publishes a release.
@@ -138,7 +138,7 @@ The screenshots in this README are generated with `node scripts/screenshots.mjs`
 
 ## ⚖️ Use it responsibly
 
-Siphon is meant for content you are allowed to keep: your own videos, public domain or Creative Commons works, or a private copy where the law in your country allows it. Respect copyright and each site's terms of service. Siphon is not affiliated with any of the sites mentioned.
+Decant is meant for content you are allowed to keep: your own videos, public domain or Creative Commons works, or a private copy where the law in your country allows it. Respect copyright and each site's terms of service. Decant is not affiliated with any of the sites mentioned.
 
 ## 🙏 Credits
 

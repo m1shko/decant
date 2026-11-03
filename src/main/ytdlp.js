@@ -6,8 +6,8 @@ const AUDIO_FORMATS = ['mp3', 'm4a', 'wav', 'flac'];
 const VIDEO_FORMATS = ['mp4'];
 const MP3_BITRATES = ['320', '192', '128'];
 const VIDEO_HEIGHTS = [2160, 1440, 1080, 720, 480, 360];
-const PROGRESS_PREFIX = '[siphon]';
-const FILE_PREFIX = 'SIPHONFILE|';
+const PROGRESS_PREFIX = '[decant]';
+const FILE_PREFIX = 'DECANTFILE|';
 
 // "1:20", "01:02:03", "80" or "80.5" -> seconds. Returns null for anything else.
 function parseTime(text) {
@@ -91,7 +91,7 @@ function num(value) {
   return Number.isFinite(n) ? n : null;
 }
 
-// One "[siphon] a|b|c|d|e|f" line from --progress-template.
+// One "[decant] a|b|c|d|e|f" line from --progress-template.
 function parseProgressLine(line) {
   const at = line.indexOf(PROGRESS_PREFIX);
   if (at === -1) return null;

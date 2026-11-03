@@ -39,7 +39,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: siphon-${{ runner.os }}
+          name: decant-${{ runner.os }}
           path: |
             dist/*.dmg
             dist/*.zip

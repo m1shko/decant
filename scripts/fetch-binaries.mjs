@@ -1,4 +1,4 @@
-// Fills bin/ with the tools Siphon drives: yt-dlp (from its GitHub releases),
+// Fills bin/ with the tools Decant drives: yt-dlp (from its GitHub releases),
 // ffmpeg (from the ffmpeg-static package) and ffprobe (from the same
 // ffmpeg-static release, which the package itself does not install).
 // electron-builder then copies bin/ into the app's resources.
@@ -13,7 +13,7 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const binDir = path.join(root, 'bin');
 const platform = process.platform;
 const exe = platform === 'win32' ? '.exe' : '';
-const refresh = Boolean(process.env.SIPHON_REFRESH_BINARIES);
+const refresh = Boolean(process.env.DECANT_REFRESH_BINARIES);
 
 const YTDLP_ASSET = {
   darwin: 'yt-dlp_macos',
@@ -22,7 +22,7 @@ const YTDLP_ASSET = {
 }[platform];
 
 async function download(url) {
-  console.log(`[siphon] downloading ${url}`);
+  console.log(`[decant] downloading ${url}`);
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
   return Buffer.from(await res.arrayBuffer());
@@ -59,4 +59,4 @@ async function fetchFfprobe() {
 fs.mkdirSync(binDir, { recursive: true });
 copyFfmpeg();
 await Promise.all([fetchYtDlp(), fetchFfprobe()]);
-console.log(`[siphon] binaries ready in ${binDir}`);
+console.log(`[decant] binaries ready in ${binDir}`);
