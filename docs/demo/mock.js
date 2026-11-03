@@ -1,5 +1,5 @@
 // Stand-in for the Electron preload so the interface can be rendered in a plain
-// browser for README screenshots: docs/demo/index.html?scene=audio|video|playlist|history
+// browser for README screenshots: docs/demo/index.html?scene=audio|video|playlist|history|library
 (function () {
   const scene = new URLSearchParams(location.search).get('scene') || 'audio';
 
@@ -98,6 +98,37 @@
     date: now - hours * 3600 * 1000,
   }));
 
+  const library = [
+    ['Sunset Drive — synthwave mix for coding', 'Neon Avenue', 'video', 3725, 0.35, 812, '#ff7a59', '#7b2ff7', 'SUNSET'],
+    ['How to tune your road bike', 'Pedal Lab', 'video', 754, 0.8, 164, '#56ab2f', '#a8e063', 'BIKE'],
+    ['Quick recipe: lemon pasta in 10 minutes', 'Kitchen Notes', 'video', 612, 0, 98, '#f9d423', '#ff4e50', 'RECIPE'],
+    ['Podcast — Episode 42: sleep', 'Slow Talk', 'audio', 2890, 0.5, 46, '#614385', '#516395', 'EP. 42'],
+    ['Acoustic live session — “Quiet Days”', 'Harbour Sessions', 'video', 1488, 0, 305, '#43cea2', '#185a9d', 'LIVE'],
+    ['Misty morning', 'Lea M.', 'video', 214, 0, 38, '#2bc0e4', '#1d1d3a', ''],
+    ['Coffee by the harbour', 'Lea M.', 'video', 187, 0, 33, '#f7971e', '#1d1d3a', ''],
+    ['Lisbon rooftops', 'Lea M.', 'video', 243, 0, 41, '#ee0979', '#1d1d3a', ''],
+  ].map(([title, uploader, kind, duration, watched, mb, a, b, label], i) => ({
+    id: `l${i}`,
+    title,
+    uploader,
+    kind,
+    duration,
+    position: duration * watched,
+    size: mb * 1024 * 1024,
+    thumbnail: art(a, b, label),
+    date: now - i * 3600 * 1000,
+  }));
+  const playlists = [
+    {
+      id: 'p1',
+      title: 'Sunday chill',
+      uploader: 'Lea M.',
+      thumbnail: art('#2bc0e4', '#1d1d3a', ''),
+      entries: [5, 6, 7].map((i, index) => ({ id: `l${i}`, index })),
+    },
+  ];
+  const shelf = scene === 'library' ? { items: library, playlists } : { items: [], playlists: [] };
+
   const noop = () => {};
   const listen = () => noop;
   window.decant = {
@@ -127,7 +158,7 @@
     },
     history: { list: async () => history, remove: async () => history, clear: async () => [], onUpdate: listen },
     library: {
-      list: async () => ({ items: [], playlists: [] }),
+      list: async () => shelf,
       remove: async () => ({ items: [], playlists: [] }),
       removeFromPlaylist: async () => ({ items: [], playlists: [] }),
       removePlaylist: async () => ({ items: [], playlists: [] }),
@@ -138,6 +169,8 @@
     },
     file: { exists: async (f) => Boolean(f), reveal: noop, open: noop },
     openLink: noop,
+    pip: { fit: noop, drag: noop, onPointer: listen },
+    focusWindow: noop,
     readClipboard: async () =>
       scene === 'history' ? '' : scene === 'playlist' ? 'https://www.youtube.com/playlist?list=demo' : 'https://www.youtube.com/watch?v=demo',
     engine: { version: async () => '2026.10.22', update: async () => '2026.10.22', onVersion: listen },
@@ -146,6 +179,7 @@
   window.addEventListener('load', () => {
     setTimeout(() => {
       if (scene === 'history') document.querySelector('[data-tab="history"]').click();
+      if (scene === 'library') document.querySelector('[data-tab="library"]').click();
       if (scene === 'video') {
         const trim = document.querySelector('.trim input[type="checkbox"]');
         trim.click();

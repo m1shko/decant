@@ -5,7 +5,7 @@
 # Decant
 
 **Paste a link, pick audio or video, done.**
-Download from YouTube, Instagram, TikTok and 1,000+ other sites — on Mac, Windows and Linux. No ads, no account, no limits.
+Download from YouTube, Instagram, TikTok and 1,000+ other sites, or save videos to Decant's own library and watch them offline — on Mac, Windows and Linux. No ads, no account, no limits.
 
 [![Build](https://github.com/m1shko/decant/actions/workflows/build.yml/badge.svg)](https://github.com/m1shko/decant/actions/workflows/build.yml)
 [![Latest release](https://img.shields.io/github/v/release/m1shko/decant?label=release&color=6d4aff)](https://github.com/m1shko/decant/releases/latest)
@@ -28,6 +28,9 @@ Download from YouTube, Instagram, TikTok and 1,000+ other sites — on Mac, Wind
 | 🎬 **Video**             | MP4 from 360p to 4K, using H.264 whenever possible so it plays everywhere (QuickTime, Windows, phones) |
 | ✂️ **Clips**             | Grab just a part: "from 12:30 to 16:05"                                                                |
 | 📃 **Playlists**         | Tick the items you want, they go straight to the queue                                                 |
+| 📚 **Library**           | Save videos and music inside Decant instead of your Downloads folder, and watch them offline. Playlists stay together, and a video you already have is never downloaded twice |
+| ▶️ **Player**            | Chapters on the seek bar, subtitles you can restyle, speed, theater and mini player, and the keyboard shortcuts you'd expect (press `?` to see them). Picks up where you left off |
+| 🪟 **Picture-in-picture** | Switch to another app while a video plays and it keeps going in a small floating window                |
 | ⏬ **Queue**             | Line up as many downloads as you like, two run at once, with speed and time left                       |
 | 🖼️ **Cover art & tags**  | Title, artist and thumbnail embedded in the file, so your music library stays tidy                     |
 | 📋 **Auto-paste**        | Copy a link in your browser, switch to Decant: it is already loaded. Drag and drop works too           |
@@ -39,6 +42,8 @@ Download from YouTube, Instagram, TikTok and 1,000+ other sites — on Mac, Wind
 <div align="center">
 <img src="docs/screenshots/video-dark.png" width="400" alt="Choosing video quality and a clip" />
 <img src="docs/screenshots/playlist-dark.png" width="400" alt="Picking items from a playlist" />
+<br />
+<img src="docs/screenshots/library-dark.png" width="808" alt="The library, with videos saved to watch offline" />
 </div>
 
 ## 📦 Install
@@ -67,6 +72,7 @@ Nothing else to install: everything Decant needs is bundled.
 1. **Copy a link** (YouTube video, Instagram Reel, TikTok, playlist…) and paste it into Decant. If Decant is already open, the link shows up by itself.
 2. **Choose** *Audio* or *Video*, then the format and quality. Tick *Only part of it* to keep just a clip.
 3. **Click Download.** The file lands in your *Downloads* folder (switch it with the **Change** button right under the preview).
+   Or click **Save to library** to keep it inside Decant and watch it from the **Library** tab.
 
 ## ❓ FAQ
 
@@ -96,6 +102,12 @@ Above 1080p, YouTube only offers VP9 or AV1. The MP4 plays fine in [VLC](https:/
 - **MP3 320 kbps**: the default, plays everywhere.
 - **M4A**: the audio exactly as the site streams it, no re-encoding. Smaller than MP3 and just as good.
 - **FLAC / WAV**: lossless formats, handy for editing or DJing. Note that they can't sound better than the source.
+</details>
+
+<details>
+<summary><b>Where does the library keep my videos?</b></summary>
+
+In Decant's own data folder, so they don't clutter your Downloads: `~/Library/Application Support/Decant/Library` on macOS, `%APPDATA%\Decant\Library` on Windows, `~/.config/Decant/Library` on Linux. To get a regular file out, use **Save a copy…** on a video. Removing a video from the library deletes its file.
 </details>
 
 <details>
