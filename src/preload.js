@@ -40,7 +40,7 @@ contextBridge.exposeInMainWorld('decant', {
   },
   file: { exists: invoke('file:exists'), reveal: invoke('file:reveal'), open: invoke('file:open') },
   openLink: invoke('link:open'),
-  pip: { fit: invoke('pip:fit') },
+  pip: { fit: invoke('pip:fit'), onPointer: listen('pip:pointer') },
   focusWindow: invoke('window:focus'),
   readClipboard: invoke('clipboard:read'),
   engine: { version: invoke('engine:version'), update: invoke('engine:update'), onVersion: listen('engine:version') },
