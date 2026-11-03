@@ -54,6 +54,10 @@ const settings = jsonFile('settings.json', {
   videoQuality: '1080',
   cookiesBrowser: '',
   subtitleLang: '',
+  captionStyle: {},
+  playerVolume: 1,
+  playerMuted: false,
+  theater: false,
   lastEngineUpdate: 0,
 });
 
