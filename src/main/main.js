@@ -303,6 +303,7 @@ function registerIpc() {
   ipcMain.handle('clipboard:read', () => clipboard.readText());
 
   ipcMain.handle('pip:fit', (_e, ratio) => fitPip(ratio));
+  ipcMain.on('pip:drag', (_e, phase) => dragPip(phase));
   ipcMain.handle('window:focus', () => {
     if (!win || win.isDestroyed()) return;
     if (win.isMinimized()) win.restore();
@@ -353,21 +354,16 @@ function pipOptions() {
   };
 }
 
-// The page gets no mouse events over the parts of the PiP window that drag
-// it around, so the pointer is watched from here: 'move' while it moves
-// over the window, 'leave' once it is out.
+// A window that is not in front may not learn that the pointer left it, so
+// that is watched from here.
 function watchPipPointer(child) {
-  let last = null;
   let inside = false;
   const timer = setInterval(() => {
     if (child.isDestroyed()) return clearInterval(timer);
     const p = screen.getCursorScreenPoint();
     const b = child.getBounds();
     const over = p.x >= b.x && p.x < b.x + b.width && p.y >= b.y && p.y < b.y + b.height;
-    const moved = !last || p.x !== last.x || p.y !== last.y;
-    last = p;
-    if (over && moved) send('pip:pointer', 'move');
-    else if (!over && inside) send('pip:pointer', 'leave');
+    if (!over && inside) send('pip:pointer', 'leave');
     inside = over;
   }, 100);
   child.on('closed', () => clearInterval(timer));
@@ -385,6 +381,22 @@ function setupPip(child) {
   child.on('closed', () => {
     if (pipWin === child) pipWin = null;
   });
+}
+
+// The page moves the window itself: a drag region would keep clicks from it.
+// It follows the pointer as the screen sees it, not as the moving page does.
+let pipDragFrom = null;
+function dragPip(phase) {
+  if (!pipWin || pipWin.isDestroyed()) return;
+  const p = screen.getCursorScreenPoint();
+  if (phase === 'start') {
+    const [x, y] = pipWin.getPosition();
+    pipDragFrom = { x: x - p.x, y: y - p.y };
+  } else if (phase === 'move' && pipDragFrom) pipWin.setPosition(p.x + pipDragFrom.x, p.y + pipDragFrom.y);
+  else if (phase === 'end') {
+    pipDragFrom = null;
+    settings.set({ pipBounds: pipWin.getBounds() });
+  }
 }
 
 // Fits the window to the video: same long side, bottom-right corner kept.

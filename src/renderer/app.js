@@ -1148,6 +1148,10 @@ function ctl(name, label, onclick, cls = '') {
 }
 
 function setCtl(button, name, label) {
+  // Runs every frame in the PiP window: a new icon under the pointer would
+  // swallow the click.
+  if (button.dataset.icon === name) return;
+  button.dataset.icon = name;
   button.replaceChildren(icon(name));
   button.title = label;
   button.setAttribute('aria-label', label);
@@ -1746,8 +1750,8 @@ function renderPip() {
       h('div', { class: 'pip-bottom' }, pip.time, seek),
     ),
   );
-  // Over the buttons the page sees the pointer itself (elsewhere: onPointer).
   pip.root.addEventListener('mousemove', pokePip);
+  pip.root.addEventListener('pointerdown', dragPip);
   doc.body.replaceChildren(pip.root);
   moveMedia(() => pip.root.prepend(media));
   media.controls = false;
@@ -1761,17 +1765,52 @@ function renderPip() {
   updatePip();
 }
 
+// Dragging the window anywhere but on the controls moves it; a click there
+// hides the controls.
+function dragPip(e) {
+  if (e.button !== 0 || e.target.closest('button, .pip-seek')) return;
+  const root = e.currentTarget;
+  const from = { x: e.screenX, y: e.screenY };
+  let dragged = false;
+  root.setPointerCapture(e.pointerId);
+  api.pip.drag('start');
+  const move = (ev) => {
+    const dx = ev.screenX - from.x;
+    const dy = ev.screenY - from.y;
+    if (!dragged && Math.hypot(dx, dy) < 4) return;
+    dragged = true;
+    api.pip.drag('move');
+  };
+  const end = () => {
+    root.removeEventListener('pointermove', move);
+    root.removeEventListener('pointerup', end);
+    root.removeEventListener('pointercancel', end);
+    if (dragged) api.pip.drag('end');
+    else hidePipControls(from);
+  };
+  root.addEventListener('pointermove', move);
+  root.addEventListener('pointerup', end);
+  root.addEventListener('pointercancel', end);
+}
+
 // The PiP controls show while the pointer moves over the window, and hide
-// 3 s after it stops (unless paused) or as soon as it leaves.
-function pokePip() {
+// 3 s after it stops (unless paused), as soon as it leaves, or on a click.
+function pokePip(e) {
   if (!pip?.root) return;
+  // After a click hid them, a slight nudge of the pointer does not bring them back.
+  if (pip.quiet && e?.screenX != null) {
+    if (Math.hypot(e.screenX - pip.quiet.x, e.screenY - pip.quiet.y) < 12) return;
+  }
+  pip.quiet = null;
   pip.root.classList.add('active');
   clearTimeout(pip.hideTimer);
   pip.hideTimer = setTimeout(() => pip?.root && !player?.media.paused && pip.root.classList.remove('active'), 3000);
 }
 
-function hidePipControls() {
+// at: where a click hid them (see pokePip).
+function hidePipControls(at = null) {
   if (!pip?.root) return;
+  pip.quiet = at;
   clearTimeout(pip.hideTimer);
   pip.root.classList.remove('active');
 }
@@ -2275,7 +2314,7 @@ async function init() {
   window.addEventListener('beforeunload', () => player && player.save());
   window.addEventListener('resize', () => player && updateTime());
   window.addEventListener('blur', () => setTimeout(autoPip, 200));
-  api.pip.onPointer((event) => (event === 'move' ? pokePip() : hidePipControls()));
+  api.pip.onPointer((event) => event === 'leave' && hidePipControls());
   window.addEventListener('focus', () => pip && !pip.manual && leavePip());
   document.addEventListener('fullscreenchange', () => {
     if (!player || player.mini) return;
