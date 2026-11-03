@@ -1860,8 +1860,7 @@ html.pip-window body {
   -webkit-app-region: drag;
 }
 
-.pip:hover .pip-overlay,
-.pip.paused .pip-overlay {
+.pip.active .pip-overlay {
   opacity: 1;
 }
 
@@ -1972,8 +1971,7 @@ html.pip-window body {
   bottom: 10px;
 }
 
-.pip:hover .captions,
-.pip.paused .captions {
+.pip.active .captions {
   bottom: 42px;
 }
 

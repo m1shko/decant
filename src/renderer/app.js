@@ -1707,7 +1707,7 @@ function renderPip() {
   const doc = pip.win.document;
   doc.title = item.title;
   const c = (pip.ctl = {});
-  c.play = pipButton('play', 'Play', togglePlay, 'big filled');
+  c.play = pipButton('play', 'Play', () => (togglePlay(), pokePip()), 'big filled');
   pip.bar = h('div', { class: 'pip-fill' });
   pip.time = h('span', { class: 'pip-time' });
   pip.captions = h('div', { class: 'captions' });
@@ -1717,6 +1717,7 @@ function renderPip() {
     if (media.duration) media.currentTime = clamp((e.clientX - box.left) / box.width, 0, 1) * media.duration;
   };
   seek.addEventListener('pointerdown', (e) => {
+    pokePip();
     seek.setPointerCapture(e.pointerId);
     seekTo(e);
   });
@@ -1745,6 +1746,8 @@ function renderPip() {
       h('div', { class: 'pip-bottom' }, pip.time, seek),
     ),
   );
+  // Over the buttons the page sees the pointer itself (elsewhere: onPointer).
+  pip.root.addEventListener('mousemove', pokePip);
   doc.body.replaceChildren(pip.root);
   moveMedia(() => pip.root.prepend(media));
   media.controls = false;
@@ -1756,6 +1759,21 @@ function renderPip() {
   fit();
   media.addEventListener('loadedmetadata', fit, { once: true });
   updatePip();
+}
+
+// The PiP controls show while the pointer moves over the window, and hide
+// 3 s after it stops (unless paused) or as soon as it leaves.
+function pokePip() {
+  if (!pip?.root) return;
+  pip.root.classList.add('active');
+  clearTimeout(pip.hideTimer);
+  pip.hideTimer = setTimeout(() => pip?.root && !player?.media.paused && pip.root.classList.remove('active'), 3000);
+}
+
+function hidePipControls() {
+  if (!pip?.root) return;
+  clearTimeout(pip.hideTimer);
+  pip.root.classList.remove('active');
 }
 
 function updatePip() {
@@ -2257,6 +2275,7 @@ async function init() {
   window.addEventListener('beforeunload', () => player && player.save());
   window.addEventListener('resize', () => player && updateTime());
   window.addEventListener('blur', () => setTimeout(autoPip, 200));
+  api.pip.onPointer((event) => (event === 'move' ? pokePip() : hidePipControls()));
   window.addEventListener('focus', () => pip && !pip.manual && leavePip());
   document.addEventListener('fullscreenchange', () => {
     if (!player || player.mini) return;

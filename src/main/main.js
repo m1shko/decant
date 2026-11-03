@@ -353,8 +353,29 @@ function pipOptions() {
   };
 }
 
+// The page gets no mouse events over the parts of the PiP window that drag
+// it around, so the pointer is watched from here: 'move' while it moves
+// over the window, 'leave' once it is out.
+function watchPipPointer(child) {
+  let last = null;
+  let inside = false;
+  const timer = setInterval(() => {
+    if (child.isDestroyed()) return clearInterval(timer);
+    const p = screen.getCursorScreenPoint();
+    const b = child.getBounds();
+    const over = p.x >= b.x && p.x < b.x + b.width && p.y >= b.y && p.y < b.y + b.height;
+    const moved = !last || p.x !== last.x || p.y !== last.y;
+    last = p;
+    if (over && moved) send('pip:pointer', 'move');
+    else if (!over && inside) send('pip:pointer', 'leave');
+    inside = over;
+  }, 100);
+  child.on('closed', () => clearInterval(timer));
+}
+
 function setupPip(child) {
   pipWin = child;
+  watchPipPointer(child);
   child.setAlwaysOnTop(true, 'floating');
   if (process.platform === 'darwin') child.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   child.showInactive();
