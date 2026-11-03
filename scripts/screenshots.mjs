@@ -27,6 +27,7 @@ const shots = [
   ['video', 'dark'],
   ['playlist', 'dark'],
   ['history', 'dark'],
+  ['library', 'dark'],
   ['audio', 'light'],
 ];
 
