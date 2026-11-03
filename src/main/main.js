@@ -8,9 +8,10 @@ const binaries = require('./binaries');
 const { settings, history, library } = require('./store');
 const { Queue } = require('./queue');
 
-// The player reads library files through decant-media://<id>/media (and /cover).
+// The player reads library files through decant-media://<id>/media (and
+// /cover, /subs/<lang>). Subtitle tracks are fetched with CORS, hence corsEnabled.
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'decant-media', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } },
+  { scheme: 'decant-media', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true, corsEnabled: true } },
 ]);
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -59,13 +60,35 @@ queue.on('done', (job) => {
   send('history:update', history.list());
 });
 
+// Subtitle languages to fetch: the system's, then English.
+function subtitleLanguages() {
+  const langs = [...app.getPreferredSystemLanguages(), 'en'].map((l) => l.split('-')[0].toLowerCase());
+  return [...new Set(langs)].slice(0, 3);
+}
+
+// Chapters are timed against the whole video: shift them to fit a clip.
+function clipChapters(chapters = [], trim) {
+  if (!trim) return chapters;
+  const start = Number(trim.start) || 0;
+  const end = trim.end == null ? Infinity : Number(trim.end);
+  return chapters
+    .filter((c) => (c.end ?? Infinity) > start && c.start < end)
+    .map((c) => ({ ...c, start: Math.max(0, c.start - start), end: c.end == null ? null : Math.min(c.end, end) - start }));
+}
+
 function addToLibrary(job) {
   const dir = library.dir(job.libraryId);
   const file = job.filePath && path.basename(job.filePath);
   let size = 0;
+  let names = [];
   try {
     size = fs.statSync(path.join(dir, file)).size;
+    names = fs.readdirSync(dir);
   } catch {}
+  const subtitles = names
+    .map((name) => /^subs\.(.+)\.vtt$/.exec(name))
+    .filter(Boolean)
+    .map(([name, lang]) => ({ lang, file: name }));
   library.add({
     id: job.libraryId,
     url: job.url,
@@ -78,7 +101,9 @@ function addToLibrary(job) {
     quality: job.quality,
     trim: job.trim || null,
     file,
-    cover: fs.existsSync(path.join(dir, 'cover.jpg')) ? 'cover.jpg' : null,
+    cover: names.includes('cover.jpg') ? 'cover.jpg' : null,
+    chapters: clipChapters(job.chapters, job.trim),
+    subtitles,
     size,
     date: Date.now(),
     position: 0,
@@ -94,6 +119,7 @@ const MIME = {
   flac: 'audio/flac',
   wav: 'audio/wav',
   jpg: 'image/jpeg',
+  vtt: 'text/vtt',
 };
 
 // Serves library files with byte ranges, which the player needs to seek.
@@ -101,7 +127,11 @@ const MIME = {
 function serveLibrary(request) {
   const { host: id, pathname } = new URL(request.url);
   const item = library.get(id);
-  const name = item && { '/media': item.file, '/cover': item.cover }[pathname];
+  const name = !item
+    ? null
+    : pathname.startsWith('/subs/')
+      ? item.subtitles?.find((s) => s.lang === pathname.slice('/subs/'.length))?.file
+      : { '/media': item.file, '/cover': item.cover }[pathname];
   if (!name) return new Response(null, { status: 404 });
   const file = path.join(library.dir(id), name);
   let size;
@@ -110,7 +140,11 @@ function serveLibrary(request) {
   } catch {
     return new Response(null, { status: 404 });
   }
-  const headers = { 'Content-Type': MIME[path.extname(file).slice(1)] || 'application/octet-stream', 'Accept-Ranges': 'bytes' };
+  const headers = {
+    'Content-Type': MIME[path.extname(file).slice(1)] || 'application/octet-stream',
+    'Accept-Ranges': 'bytes',
+    'Access-Control-Allow-Origin': '*',
+  };
   const range = /^bytes=(\d*)-(\d*)$/.exec(request.headers.get('Range') || '');
   if (!range) {
     return new Response(Readable.toWeb(fs.createReadStream(file)), { headers: { ...headers, 'Content-Length': String(size) } });
@@ -186,7 +220,7 @@ function registerIpc() {
       specs.map((s) => {
         if (!s.library) return { ...s, outputDir: outputDir() };
         const libraryId = crypto.randomUUID();
-        return { ...s, libraryId, outputDir: library.dir(libraryId) };
+        return { ...s, libraryId, outputDir: library.dir(libraryId), subtitles: subtitleLanguages() };
       }),
     ),
   );

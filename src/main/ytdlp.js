@@ -8,6 +8,7 @@ const MP3_BITRATES = ['320', '192', '128'];
 const VIDEO_HEIGHTS = [2160, 1440, 1080, 720, 480, 360];
 const PROGRESS_PREFIX = '[decant]';
 const FILE_PREFIX = 'DECANTFILE|';
+const CHAPTERS_PREFIX = 'DECANTCHAPTERS|';
 
 // "1:20", "01:02:03", "80" or "80.5" -> seconds. Returns null for anything else.
 function parseTime(text) {
@@ -82,8 +83,29 @@ function downloadArgs(job, env) {
 
   if (job.format !== 'wav') args.push('--embed-metadata', '--embed-thumbnail');
   if (job.format !== 'wav' || job.library) args.push('--convert-thumbnails', 'jpg');
-  // The library shows its own copy of the cover, so it works offline.
-  if (job.library) args.push('--write-thumbnail', '--output', 'thumbnail:cover.%(ext)s');
+  // The library shows its own copy of the cover, so it works offline, and
+  // keeps chapters and subtitles for the player. A clip skips subtitles: their
+  // times would not match. Subtitles are a bonus, so errors fetching them must
+  // not fail the download (--ignore-errors still exits non-zero if the video fails).
+  if (job.library) {
+    args.push('--write-thumbnail', '--output', 'thumbnail:cover.%(ext)s');
+    args.push('--print', `after_move:${CHAPTERS_PREFIX}%(chapters)j`);
+    if (job.kind === 'video' && !job.trim && job.subtitles?.length) {
+      args.push(
+        '--ignore-errors',
+        '--write-subs',
+        '--write-auto-subs',
+        '--sub-langs',
+        job.subtitles.join(','),
+        '--sub-format',
+        'vtt/best',
+        '--convert-subs',
+        'vtt',
+        '--output',
+        'subtitle:subs.%(ext)s',
+      );
+    }
+  }
   args.push('--', job.url);
   return args;
 }
@@ -115,6 +137,22 @@ function parseProgressLine(line) {
 
 function parseFileLine(line) {
   return line.startsWith(FILE_PREFIX) ? line.slice(FILE_PREFIX.length).trim() : null;
+}
+
+// The chapters line printed for library downloads -> [{ start, end, title }].
+// Returns undefined for any other line.
+function parseChaptersLine(line) {
+  if (!line.startsWith(CHAPTERS_PREFIX)) return undefined;
+  let chapters;
+  try {
+    chapters = JSON.parse(line.slice(CHAPTERS_PREFIX.length));
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(chapters)) return [];
+  return chapters
+    .filter((c) => Number.isFinite(c?.start_time))
+    .map((c, i) => ({ start: c.start_time, end: c.end_time ?? null, title: c.title || `Chapter ${i + 1}` }));
 }
 
 // Lines yt-dlp prints while ffmpeg converts, merges or tags the file.
@@ -243,6 +281,7 @@ module.exports = {
   downloadArgs,
   parseProgressLine,
   parseFileLine,
+  parseChaptersLine,
   isPostprocessLine,
   friendlyError,
   summarizeInfo,

@@ -120,6 +120,11 @@ class Queue extends EventEmitter {
         }
         return;
       }
+      const chapters = ytdlp.parseChaptersLine(line);
+      if (chapters) {
+        job.chapters = chapters;
+        return;
+      }
       const file = ytdlp.parseFileLine(line);
       if (file) {
         job.filePath = file;

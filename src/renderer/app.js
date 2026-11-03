@@ -46,6 +46,8 @@ const ICONS = {
   library: 'M3 6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM10 9v6l5-3z',
   export: 'M12 15V4M7 9l5-5 5 5M5 20h14',
   back: 'M15 5l-7 7 7 7',
+  pause: 'M9 5v14M15 5v14',
+  expand: 'M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7',
 };
 
 function icon(name) {
@@ -583,6 +585,7 @@ function renderTile(item) {
           'Remove from library',
           stop(async () => {
             if (!confirm(`Remove “${item.title}” from your library? The file will be deleted.`)) return;
+            if (player?.item.id === item.id) stopPlayer();
             state.library = await api.library.remove(item.id);
             renderLibrary();
           }),
@@ -621,24 +624,64 @@ function renderLibrary() {
 
 // --- Player -----------------------------------------------------------------
 
+// What is playing. It shows full size in #player, or in the mini player at the
+// bottom while you browse the rest of the app: the same <video> moves between
+// the two, so playback carries on.
 let player = null;
+
+const subtitleUrl = (item, lang) => `decant-media://${item.id}/subs/${lang}`;
+
+function languageName(lang) {
+  try {
+    return new Intl.DisplayNames([navigator.language], { type: 'language' }).of(lang) || lang;
+  } catch {
+    return lang;
+  }
+}
 
 function playById(id) {
   const item = state.library.find((i) => i.id === id);
   if (item) openPlayer(item);
 }
 
+// Index of the chapter playing at `time`, or -1.
+function chapterAt(chapters, time) {
+  let index = -1;
+  for (const [i, c] of chapters.entries()) if (c.start <= time + 0.25) index = i;
+  return index;
+}
+
+function seekChapter(step) {
+  if (!player) return;
+  const { media, item } = player;
+  const chapters = item.chapters || [];
+  const current = chapterAt(chapters, media.currentTime);
+  // "Previous" first goes back to the start of the chapter playing.
+  let target = current + step;
+  if (step < 0 && current >= 0 && media.currentTime - chapters[current].start > 3) target = current;
+  if (target >= chapters.length) return;
+  media.currentTime = chapters[Math.max(0, target)].start;
+}
+
 function openPlayer(item) {
-  closePlayer();
+  if (player?.item.id === item.id) return expandPlayer();
+  stopPlayer();
   const audio = item.kind === 'audio';
-  const media = h(audio ? 'audio' : 'video', {
-    class: 'player-media',
-    src: mediaUrl(item),
-    poster: audio ? null : coverUrl(item),
-    controls: true,
-    autoplay: true,
-    preload: 'auto',
-  });
+  const media = h(
+    audio ? 'audio' : 'video',
+    {
+      class: 'player-media',
+      src: mediaUrl(item),
+      poster: audio ? null : coverUrl(item),
+      crossorigin: 'anonymous',
+      autoplay: true,
+      preload: 'auto',
+    },
+    (item.subtitles || []).map((s) => h('track', { kind: 'subtitles', src: subtitleUrl(item, s.lang), srclang: s.lang, label: languageName(s.lang) })),
+  );
+  // Dropped all at once when the player stops, so a late 'pause' cannot save position 0.
+  const listeners = new AbortController();
+  const on = (type, fn) => media.addEventListener(type, fn, { signal: listeners.signal });
   let lastSave = 0;
   const save = (position = media.currentTime) => {
     lastSave = Date.now();
@@ -646,32 +689,97 @@ function openPlayer(item) {
     Object.assign(item, { position, ...(duration ? { duration } : {}) });
     api.library.progress(item.id, { position, duration });
   };
+  player = { item, media, save, listeners, mini: false, chapter: null };
+
   // Picks up where it was left, unless that was the very end.
-  media.addEventListener('loadedmetadata', () => {
+  on('loadedmetadata', () => {
     if (item.position && item.position < media.duration - 5) media.currentTime = item.position;
   });
-  media.addEventListener('timeupdate', () => {
+  on('timeupdate', () => {
     if (Date.now() - lastSave > 5000) save();
+    updateProgress();
   });
-  media.addEventListener('pause', () => save());
-  media.addEventListener('ended', () => save(0));
-  media.addEventListener('error', () => {
-    stage.replaceChildren(h('div', { class: 'player-error' }, 'This file can’t be played. It may have been deleted or use a format the player doesn’t support.'));
+  on('pause', () => {
+    save();
+    updatePlayState();
   });
+  on('play', updatePlayState);
+  on('ended', () => save(0));
+  on('error', () => {
+    const text = 'This file can’t be played. It may have been deleted or use a format the player doesn’t support.';
+    if (player.mini) player.miniSub.textContent = text;
+    else player.stage.replaceChildren(h('div', { class: 'player-error' }, text));
+  });
+
+  // Subtitles: show the language picked last time, and remember what gets picked.
+  // Chromium may switch on a track of its own while loading, so the choice is
+  // applied once the metadata is in, and changes before that are not saved.
+  let subtitlesReady = false;
+  on('loadedmetadata', () => {
+    for (const track of media.textTracks) track.mode = track.language === state.settings.subtitleLang ? 'showing' : 'disabled';
+    subtitlesReady = true;
+  });
+  media.textTracks.addEventListener(
+    'change',
+    () => {
+      const showing = [...media.textTracks].filter((t) => t.mode === 'showing');
+      if (!subtitlesReady || showing.length > 1) return;
+      const lang = showing[0]?.language || '';
+      if (lang !== (state.settings.subtitleLang || '')) {
+        state.settings.subtitleLang = lang;
+        api.settings.set({ subtitleLang: lang });
+      }
+    },
+    { signal: listeners.signal },
+  );
 
   if ('mediaSession' in navigator) {
-    navigator.mediaSession.metadata = new MediaMetadata({ title: item.title, artist: item.uploader || '' });
+    const cover = coverUrl(item);
+    navigator.mediaSession.metadata = new MediaMetadata({ title: item.title, artist: item.uploader || '', artwork: cover ? [{ src: cover }] : [] });
+    const chapters = item.chapters?.length > 1;
+    navigator.mediaSession.setActionHandler('previoustrack', chapters ? () => seekChapter(-1) : null);
+    navigator.mediaSession.setActionHandler('nexttrack', chapters ? () => seekChapter(1) : null);
   }
+  expandPlayer();
+}
 
-  const stage = h(
+function expandPlayer() {
+  const { item, media } = player;
+  const audio = item.kind === 'audio';
+  const chapters = item.chapters || [];
+  player.mini = false;
+  media.controls = true;
+  player.stage = h(
     'div',
     { class: `player-stage${audio ? ' audio' : ''}` },
     audio ? h('img', { class: 'player-cover', src: coverUrl(item), alt: '', referrerpolicy: 'no-referrer' }) : null,
     media,
   );
+  player.chapterLabel = h('div', { class: 'player-chapter' });
+  player.chapterList = h(
+    'ol',
+    { class: 'chapters' },
+    chapters.map((c) =>
+      h(
+        'li',
+        {},
+        h(
+          'button',
+          {
+            onclick: () => {
+              media.currentTime = c.start;
+              media.play();
+            },
+          },
+          h('span', { class: 'chapter-time' }, formatDuration(c.start)),
+          h('span', { class: 'chapter-title' }, c.title),
+        ),
+      ),
+    ),
+  );
   $('#player').replaceChildren(
-    h('button', { class: 'link player-back', onclick: closePlayer }, icon('back'), 'Library'),
-    stage,
+    h('button', { class: 'link player-back', onclick: () => selectTab('library') }, icon('back'), 'Library'),
+    player.stage,
     h(
       'div',
       { class: 'player-info' },
@@ -679,6 +787,7 @@ function openPlayer(item) {
         'div',
         { class: 'media-text' },
         h('div', { class: 'player-title' }, item.title),
+        player.chapterLabel,
         h('div', { class: 'muted' }, [item.uploader, formatLabel(item)].filter(Boolean).join(' · ')),
       ),
       h(
@@ -688,35 +797,123 @@ function openPlayer(item) {
         item.url ? h('button', { class: 'btn small', onclick: () => api.openLink(item.url) }, 'Open original') : null,
       ),
     ),
+    chapters.length > 1 ? h('section', { class: 'chapters-box' }, h('h2', {}, 'Chapters'), player.chapterList) : null,
   );
-  player = { item, media, save };
+  $('#mini-player').replaceChildren();
+  $('#mini-player').hidden = true;
   for (const tab of document.querySelectorAll('.tab')) tab.hidden = true;
   $('#player').hidden = false;
   for (const btn of document.querySelectorAll('.tabs button')) btn.setAttribute('aria-selected', String(btn.dataset.tab === 'library'));
   $('main').scrollTop = 0;
+  player.chapter = null;
+  updateProgress();
   media.focus();
 }
 
-function closePlayer() {
+function minimizePlayer() {
+  const { item, media } = player;
+  const expand = () => expandPlayer();
+  player.mini = true;
+  media.controls = false;
+  player.toggle = iconButton('play', 'Play', () => (media.paused ? media.play() : media.pause()));
+  player.miniBar = h('div');
+  player.miniSub = h('div', { class: 'mini-sub' });
+  // An <audio> stays in the page (hidden) or it would stop.
+  $('#mini-player').replaceChildren(
+    h(
+      'div',
+      {
+        class: 'mini-progress',
+        onclick: (e) => {
+          const box = e.currentTarget.getBoundingClientRect();
+          if (media.duration) media.currentTime = ((e.clientX - box.left) / box.width) * media.duration;
+        },
+      },
+      player.miniBar,
+    ),
+    h('div', { class: 'mini-art', onclick: expand }, item.kind === 'audio' ? thumb(coverUrl(item)) : null, media),
+    h('div', { class: 'mini-text', onclick: expand }, h('div', { class: 'mini-title' }, item.title), player.miniSub),
+    h('div', { class: 'row-actions' }, player.toggle, iconButton('expand', 'Open player', expand), iconButton('close', 'Stop', stopPlayer)),
+  );
+  $('#mini-player').hidden = false;
+  $('#player').replaceChildren();
+  $('#player').hidden = true;
+  player.chapter = null;
+  updatePlayState();
+  updateProgress();
+}
+
+function stopPlayer() {
   if (!player) return;
-  const { media, save } = player;
+  const { media, save, listeners } = player;
   if (media.currentTime && !media.ended) save();
+  listeners.abort();
   media.pause();
   media.removeAttribute('src');
   media.load();
   player = null;
   if ('mediaSession' in navigator) navigator.mediaSession.metadata = null;
-  $('#player').replaceChildren();
-  $('#player').hidden = true;
-  selectTab('library');
+  for (const id of ['#player', '#mini-player']) {
+    $(id).replaceChildren();
+    $(id).hidden = true;
+  }
+}
+
+// Leaving the full player: keep playing in the mini player, or stop if paused.
+function leavePlayer() {
+  if (player.media.paused) stopPlayer();
+  else minimizePlayer();
+}
+
+function updatePlayState() {
+  if (!player?.mini) return;
+  const paused = player.media.paused;
+  player.toggle.replaceChildren(icon(paused ? 'play' : 'pause'));
+  player.toggle.title = paused ? 'Play' : 'Pause';
+  player.toggle.setAttribute('aria-label', player.toggle.title);
+}
+
+function updateProgress() {
+  if (!player) return;
+  const { media, item } = player;
+  if (player.mini) player.miniBar.style.width = `${media.duration ? (media.currentTime / media.duration) * 100 : 0}%`;
+  const chapters = item.chapters || [];
+  const index = chapterAt(chapters, media.currentTime);
+  if (index === player.chapter) return;
+  player.chapter = index;
+  const title = chapters.length > 1 && index >= 0 ? chapters[index].title : '';
+  if (player.mini) {
+    player.miniSub.textContent = title || item.uploader || '';
+    return;
+  }
+  player.chapterLabel.textContent = title;
+  for (const [i, li] of [...player.chapterList.children].entries()) li.classList.toggle('current', i === index);
+  // Scrolls the list only (scrollIntoView would move the whole page).
+  const list = player.chapterList;
+  const li = list.children[index];
+  if (li && (li.offsetTop < list.scrollTop || li.offsetTop + li.offsetHeight > list.scrollTop + list.clientHeight)) {
+    list.scrollTop = li.offsetTop - 4;
+  }
+}
+
+function toggleSubtitles() {
+  const tracks = [...player.media.textTracks];
+  if (!tracks.length) return;
+  const showing = tracks.find((t) => t.mode === 'showing');
+  if (showing) {
+    showing.mode = 'disabled';
+    return;
+  }
+  const own = navigator.language.split('-')[0];
+  (tracks.find((t) => t.language === state.settings.subtitleLang) || tracks.find((t) => t.language === own) || tracks[0]).mode = 'showing';
 }
 
 function onPlayerKey(e) {
-  if (!player || e.metaKey || e.ctrlKey || e.altKey || e.target.matches('input, select, textarea')) return;
+  if (!player || player.mini || e.metaKey || e.ctrlKey || e.altKey || e.target.matches('input, select, textarea')) return;
   const { media } = player;
   // The focused player handles space and arrows itself.
   const own = e.target === media;
-  if (e.key === 'Escape' && !document.fullscreenElement) closePlayer();
+  if (e.key === 'Escape' && !document.fullscreenElement) selectTab('library');
   else if ((e.key === ' ' && !own) || e.key === 'k') media.paused ? media.play() : media.pause();
   else if (e.key === 'ArrowLeft' && !own) media.currentTime -= 5;
   else if (e.key === 'ArrowRight' && !own) media.currentTime += 5;
@@ -724,8 +921,23 @@ function onPlayerKey(e) {
   else if (e.key === 'l') media.currentTime += 10;
   else if (e.key === 'f' && media.tagName === 'VIDEO') document.fullscreenElement ? document.exitFullscreen() : media.requestFullscreen();
   else if (e.key === 'm') media.muted = !media.muted;
+  else if (e.key === 'c') toggleSubtitles();
+  else if (e.key === 'p') seekChapter(-1);
+  else if (e.key === 'n') seekChapter(1);
   else return;
   e.preventDefault();
+}
+
+// Media keys and the system's Now Playing controls.
+function setupMediaKeys() {
+  if (!('mediaSession' in navigator)) return;
+  const on = (action, fn) => navigator.mediaSession.setActionHandler(action, (details) => player && fn(player.media, details));
+  on('play', (media) => media.play());
+  on('pause', (media) => media.pause());
+  on('seekbackward', (media) => (media.currentTime -= 10));
+  on('seekforward', (media) => (media.currentTime += 10));
+  on('seekto', (media, details) => (media.currentTime = details.seekTime));
+  on('stop', () => stopPlayer());
 }
 
 // --- History ----------------------------------------------------------------
@@ -777,7 +989,7 @@ async function renderHistory() {
 // --- Tabs, destination, footer ----------------------------------------------
 
 function selectTab(name) {
-  if (player) closePlayer();
+  if (player && !player.mini) leavePlayer();
   for (const btn of document.querySelectorAll('.tabs button')) btn.setAttribute('aria-selected', String(btn.dataset.tab === name));
   $('#tab-download').hidden = name !== 'download';
   $('#tab-library').hidden = name !== 'library';
@@ -828,13 +1040,14 @@ async function init() {
   renderLibrary();
   api.library.onUpdate((items) => {
     state.library = items;
-    if (!player) renderLibrary();
+    renderLibrary();
   });
   $('#library-search').addEventListener('input', (e) => {
     state.librarySearch = e.target.value;
     renderLibrary();
   });
   document.addEventListener('keydown', onPlayerKey);
+  setupMediaKeys();
   window.addEventListener('beforeunload', () => player && player.save());
 
   state.history = await api.history.list();

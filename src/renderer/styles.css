@@ -921,3 +921,157 @@ body.dragging main {
   font-weight: 600;
   user-select: text;
 }
+
+.player-chapter {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.player-chapter:empty {
+  display: none;
+}
+
+.chapters-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chapters {
+  position: relative;
+  max-height: 320px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.chapters button {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  text-align: left;
+}
+
+.chapters button:hover {
+  background: var(--surface-2);
+}
+
+.chapters li.current button {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.chapter-time {
+  flex: none;
+  min-width: 52px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.chapters li.current .chapter-time {
+  color: inherit;
+}
+
+/* Mini player ----------------------------------------------------------- */
+
+.mini {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px 8px 8px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.mini-progress {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: pointer;
+}
+
+.mini-progress::before,
+.mini-progress > div {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 0;
+  height: 2px;
+}
+
+.mini-progress::before {
+  right: 0;
+  background: var(--surface-2);
+}
+
+.mini-progress > div {
+  background: var(--accent);
+}
+
+.mini-progress:hover::before,
+.mini-progress:hover > div {
+  top: 1px;
+  height: 4px;
+}
+
+.mini-art {
+  flex: none;
+  width: 112px;
+  aspect-ratio: 16 / 9;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #000;
+  cursor: pointer;
+}
+
+.mini-art video,
+.mini-art .thumb {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 0;
+}
+
+.mini-art audio {
+  display: none;
+}
+
+.mini-text {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.mini-title,
+.mini-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mini-title {
+  font-weight: 500;
+}
+
+.mini-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.mini .icon-btn svg {
+  width: 18px;
+  height: 18px;
+}
