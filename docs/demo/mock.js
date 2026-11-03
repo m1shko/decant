@@ -126,7 +126,16 @@
       onRemoved: listen,
     },
     history: { list: async () => history, remove: async () => history, clear: async () => [], onUpdate: listen },
-    library: { list: async () => [], remove: async () => [], progress: noop, export: noop, onUpdate: listen },
+    library: {
+      list: async () => ({ items: [], playlists: [] }),
+      remove: async () => ({ items: [], playlists: [] }),
+      removeFromPlaylist: async () => ({ items: [], playlists: [] }),
+      removePlaylist: async () => ({ items: [], playlists: [] }),
+      progress: noop,
+      export: noop,
+      refresh: async () => null,
+      onUpdate: listen,
+    },
     file: { exists: async (f) => Boolean(f), reveal: noop, open: noop },
     openLink: noop,
     readClipboard: async () =>

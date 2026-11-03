@@ -74,16 +74,18 @@ test('library videos fetch subtitles, except for clips', () => {
 
 test('info line parsing', () => {
   const line =
-    'DECANTINFO|{"chapters": [{"start_time": 0.0, "end_time": 63.5, "title": "Intro"}, {"start_time": 63.5, "end_time": 120, "title": ""}], "description": "Hi\\nthere"}';
+    'DECANTINFO|{"id": "abc", "extractor_key": "Youtube", "duration": 120, "chapters": [{"start_time": 0.0, "end_time": 63.5, "title": "Intro"}, {"start_time": 63.5, "end_time": 120, "title": ""}], "description": "Hi\\nthere"}';
   assert.deepEqual(y.parseInfoLine(line), {
+    key: 'Youtube:abc',
+    duration: 120,
     chapters: [
       { start: 0, end: 63.5, title: 'Intro' },
       { start: 63.5, end: 120, title: 'Chapter 2' },
     ],
     description: 'Hi\nthere',
   });
-  assert.deepEqual(y.parseInfoLine('DECANTINFO|{"chapters": null}'), { chapters: [], description: '' });
-  assert.deepEqual(y.parseInfoLine('DECANTINFO|NA'), { chapters: [], description: '' });
+  assert.deepEqual(y.parseInfoLine('DECANTINFO|{"chapters": null}'), { key: null, duration: null, chapters: [], description: '' });
+  assert.deepEqual(y.parseInfoLine('DECANTINFO|NA'), { key: null, duration: null, chapters: [], description: '' });
   assert.equal(y.parseInfoLine('DECANTFILE|/x.mp4'), undefined);
 });
 
@@ -128,6 +130,8 @@ test('summarizeInfo flattens playlists', () => {
   });
   assert.equal(info.entries.length, 1);
   assert.equal(info.entries[0].url, 'https://www.youtube.com/watch?v=abc');
+  assert.equal(info.entries[0].key, 'Youtube:abc');
+  assert.equal(y.summarizeInfo({ id: 'xyz', extractor_key: 'Youtube', title: 'T' }).key, 'Youtube:xyz');
 });
 
 test('friendly errors', () => {

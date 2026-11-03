@@ -1611,3 +1611,210 @@ body.dragging main {
   width: 18px;
   height: 18px;
 }
+
+/* Playlists ------------------------------------------------------------- */
+
+.in-library {
+  flex: none;
+  padding: 0 7px;
+  border-radius: 99px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Two cards peeking out above the cover: a stack. */
+.playlist-tile .tile-art {
+  margin-top: 8px;
+  overflow: visible;
+  box-shadow:
+    0 -4px 0 -2px color-mix(in srgb, var(--accent) 45%, var(--surface-2)),
+    0 -8px 0 -4px color-mix(in srgb, var(--accent) 22%, var(--surface-2));
+}
+
+.playlist-tile .tile-art .thumb {
+  border-radius: 10px;
+}
+
+.playlist-tile .tile-play {
+  border-radius: 10px;
+}
+
+.playlist-count {
+  position: absolute;
+  right: 6px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 75%);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.playlist-count svg {
+  width: 14px;
+  height: 14px;
+}
+
+.playlist-view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.playlist-head {
+  display: flex;
+  gap: 20px;
+  align-items: flex-end;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, var(--accent-soft), var(--surface));
+  border: 1px solid var(--border);
+}
+
+.playlist-head .thumb {
+  width: 240px;
+  border-radius: 10px;
+}
+
+.playlist-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  user-select: text;
+}
+
+.playlist-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.playlist-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.playlist-actions .btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.playlist-actions .btn.primary svg {
+  fill: currentColor;
+}
+
+.row.clickable {
+  cursor: pointer;
+}
+
+.row.clickable:hover {
+  background: var(--surface-2);
+}
+
+.row-index {
+  flex: none;
+  width: 22px;
+  text-align: right;
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Up next, under the player */
+
+.queue-box {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.queue-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.queue-title {
+  font-weight: 600;
+}
+
+.queue-list {
+  position: relative;
+  max-height: 280px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+}
+
+.queue-list button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  text-align: left;
+}
+
+.queue-list button:hover {
+  background: var(--surface-2);
+}
+
+.queue-list li.current button {
+  background: var(--accent-soft);
+  cursor: default;
+}
+
+.queue-index {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.queue-list li.current .queue-index {
+  color: var(--accent);
+}
+
+.queue-index svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+}
+
+.queue-item {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.queue-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-item .muted {
+  font-size: 12px;
+}

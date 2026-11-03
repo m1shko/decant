@@ -5,7 +5,7 @@ const crypto = require('node:crypto');
 const { Readable } = require('node:stream');
 const ytdlp = require('./ytdlp');
 const binaries = require('./binaries');
-const { settings, history, library } = require('./store');
+const { settings, history, library, sameMedia } = require('./store');
 const { Queue } = require('./queue');
 
 // The player reads library files through decant-media://<id>/media (and
@@ -91,6 +91,7 @@ function addToLibrary(job) {
     .map(([name, lang]) => ({ lang, file: name }));
   library.add({
     id: job.libraryId,
+    key: job.key || null,
     url: job.url,
     title: job.title,
     uploader: job.uploader || null,
@@ -109,7 +110,7 @@ function addToLibrary(job) {
     date: Date.now(),
     position: 0,
   });
-  send('library:update', library.list());
+  send('library:update', library.snapshot());
 }
 
 const MIME = {
@@ -216,15 +217,31 @@ function registerIpc() {
   ipcMain.handle('folder:open', () => shell.openPath(outputDir()));
 
   ipcMain.handle('queue:list', () => queue.list());
-  ipcMain.handle('queue:add', (_e, specs) =>
-    queue.add(
-      specs.map((s) => {
-        if (!s.library) return { ...s, outputDir: outputDir() };
-        const libraryId = crypto.randomUUID();
-        return { ...s, libraryId, outputDir: library.dir(libraryId), subtitles: subtitleLanguages() };
-      }),
-    ),
-  );
+  ipcMain.handle('queue:add', (_e, specs, { playlist } = {}) => {
+    const target = playlist ? library.savePlaylist(playlist) : null;
+    const fresh = [];
+    let existing = 0;
+    for (const spec of specs) {
+      if (!spec.library) {
+        fresh.push({ ...spec, outputDir: outputDir() });
+        continue;
+      }
+      // Already in the library, or on its way there: no second download.
+      const job = queue.list().find((j) => j.library && !['error', 'canceled'].includes(j.status) && sameMedia(j, spec));
+      const libraryId = library.find(spec)?.id || job?.libraryId;
+      if (libraryId) {
+        existing++;
+        if (target) library.addToPlaylist(target.id, libraryId, spec.playlistIndex ?? 0);
+        continue;
+      }
+      const id = crypto.randomUUID();
+      if (target) library.addToPlaylist(target.id, id, spec.playlistIndex ?? 0);
+      fresh.push({ ...spec, libraryId: id, outputDir: library.dir(id), subtitles: subtitleLanguages() });
+    }
+    if (fresh.length) queue.add(fresh);
+    if (target) send('library:update', library.snapshot());
+    return { added: fresh.length, existing, playlistId: target?.id || null };
+  });
   ipcMain.handle('queue:cancel', (_e, id) => queue.cancel(id));
   ipcMain.handle('queue:retry', (_e, id) => queue.retry(id));
   ipcMain.handle('queue:remove', (_e, id) => queue.remove(id));
@@ -240,10 +257,18 @@ function registerIpc() {
     return [];
   });
 
-  ipcMain.handle('library:list', () => library.list());
+  ipcMain.handle('library:list', () => library.snapshot());
   ipcMain.handle('library:remove', (_e, id) => {
     library.remove(id);
-    return library.list();
+    return library.snapshot();
+  });
+  ipcMain.handle('library:removeFromPlaylist', (_e, playlistId, id) => {
+    library.removeFromPlaylist(playlistId, id);
+    return library.snapshot();
+  });
+  ipcMain.handle('library:removePlaylist', (_e, playlistId) => {
+    library.removePlaylist(playlistId);
+    return library.snapshot();
   });
   ipcMain.handle('library:progress', (_e, id, patch) => {
     const { position, duration } = patch;
@@ -259,7 +284,7 @@ function registerIpc() {
     const item = library.get(id);
     if (!item?.url) return null;
     const info = await probe(null, item.url);
-    const patch = { description: info.description || '' };
+    const patch = { description: info.description || '', key: item.key || info.key || null };
     if (!item.chapters) patch.chapters = clipChapters(info.chapters, item.trim);
     library.update(id, patch);
     return library.get(id);

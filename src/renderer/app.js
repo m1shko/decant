@@ -14,6 +14,8 @@ const state = {
   jobs: new Map(),
   history: [],
   library: [],
+  playlists: [],
+  openPlaylist: null,
   libraryFilter: 'all',
   librarySearch: '',
   lastClipboard: null,
@@ -61,6 +63,8 @@ const ICONS = {
   fullscreen: 'M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5',
   exitFullscreen: 'M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5',
   check: 'M5 12.5l4.5 4.5L19 7.5',
+  playlist: 'M4 6h12M4 11h12M4 16h7M15 14.5v6l5-3z',
+  shuffle: 'M3 7h3.5c2 0 3.2 1 4.3 2.7l2.4 4.6c1.1 1.7 2.3 2.7 4.3 2.7H21M3 17h3.5c1.4 0 2.4-.5 3.2-1.4M14.3 8.4c.8-.9 1.8-1.4 3.2-1.4H21M18 4l3 3-3 3M18 14l3 3-3 3',
   chevron: 'M9 6l6 6-6 6',
 };
 
@@ -314,6 +318,17 @@ function jobOptions(info) {
   return { kind: 'video', format: 'mp4', quality };
 }
 
+// The library item that already holds this media (same video, same kind, not a
+// clip), like sameMedia() in the main process.
+function findInLibrary(spec) {
+  if (spec.trim) return null;
+  return state.library.find((i) => i.kind === spec.kind && !i.trim && ((spec.key && i.key === spec.key) || (spec.url && i.url === spec.url))) || null;
+}
+
+function videoSpec(info) {
+  return { ...jobOptions(info), key: info.key, url: info.url || state.probedInput, trim: trimValue() };
+}
+
 function updateDownloadButton() {
   const btn = $('#download-btn');
   const libraryBtn = $('#library-btn');
@@ -323,12 +338,16 @@ function updateDownloadButton() {
     const trim = trimValue();
     btn.disabled = libraryBtn.disabled = trim === undefined;
     btn.lastChild.textContent = `Download · ${formatLabel(jobOptions(info))}`;
-    libraryBtn.lastChild.textContent = 'Save to library';
+    libraryBtn.lastChild.textContent = trim !== undefined && findInLibrary(videoSpec(info)) ? 'Play from library' : 'Save to library';
   } else {
     const count = state.selected.size;
     btn.disabled = libraryBtn.disabled = count === 0;
     btn.lastChild.textContent = `Add ${count} item${count === 1 ? '' : 's'} · ${formatLabel(jobOptions(info))}`;
     libraryBtn.lastChild.textContent = `Save ${count} to library`;
+    const known = info.entries.filter((e, i) => state.selected.has(i) && findInLibrary({ ...jobOptions(info), key: e.key, url: e.url })).length;
+    const hint = $('#library-hint');
+    hint.hidden = !known;
+    hint.textContent = `${known} of these ${known === 1 ? 'is' : 'are'} already in your library: saving adds ${known === 1 ? 'it' : 'them'} to the playlist without downloading again.`;
   }
 }
 
@@ -364,6 +383,7 @@ function renderPreview() {
     ),
     isPlaylist ? renderEntries(info) : null,
     renderOptions(info, opts),
+    isPlaylist ? h('div', { class: 'hint', id: 'library-hint', hidden: true }) : null,
     h(
       'div',
       { class: 'card-actions' },
@@ -406,6 +426,7 @@ function renderEntries(info) {
             },
           }),
           h('span', { class: 'title', title: entry.title }, entry.title),
+          findInLibrary({ ...jobOptions(info), key: entry.key, url: entry.url }) ? h('span', { class: 'in-library' }, 'In library') : null,
           h('span', { class: 'muted' }, formatDuration(entry.duration)),
         ),
       ),
@@ -443,23 +464,32 @@ async function enqueue({ library = false } = {}) {
   const info = state.info;
   const opts = { ...jobOptions(info), library };
   let specs;
+  let playlist = null;
   if (info.type === 'video') {
     const trim = trimValue();
     if (trim === undefined) return;
-    specs = [
-      { ...opts, url: info.url || state.probedInput, title: info.title, uploader: info.uploader, duration: info.duration, thumbnail: info.thumbnail, trim },
-    ];
+    const spec = { ...opts, ...videoSpec(info), library, title: info.title, uploader: info.uploader, duration: info.duration, thumbnail: info.thumbnail };
+    const owned = library && findInLibrary(spec);
+    if (owned) return openPlayer(owned);
+    specs = [spec];
   } else {
     specs = info.entries
-      .filter((_, i) => state.selected.has(i))
-      .map((e) => ({ ...opts, url: e.url, title: e.title, uploader: e.uploader, duration: e.duration, thumbnail: e.thumbnail, trim: null }));
+      .map((e, i) => ({ ...opts, key: e.key, url: e.url, title: e.title, uploader: e.uploader, duration: e.duration, thumbnail: e.thumbnail, trim: null, playlistIndex: i }))
+      .filter((_, i) => state.selected.has(i));
+    if (library) playlist = { key: info.key, title: info.title, uploader: info.uploader, url: state.probedInput, thumbnail: info.entries[0]?.thumbnail || null };
   }
-  await api.queue.add(specs);
+  const result = await api.queue.add(specs, { playlist });
   state.info = null;
   $('#url-input').value = '';
   renderPreview();
-  if (library) notice(specs.length > 1 ? `${specs.length} items will show up in your library once downloaded.` : 'It will show up in your library once downloaded.');
-  else notice(specs.length > 1 ? `${specs.length} items added to the queue.` : '');
+  if (playlist) {
+    const parts = [result.added && `${result.added} downloading`, result.existing && `${result.existing} already in your library, not downloaded again`];
+    notice(`Playlist “${playlist.title}” saved to your library: ${parts.filter(Boolean).join(', ')}.`);
+  } else if (library) {
+    notice(specs.length > 1 ? `${specs.length} items will show up in your library once downloaded.` : 'It will show up in your library once downloaded.');
+  } else {
+    notice(specs.length > 1 ? `${specs.length} items added to the queue.` : '');
+  }
   $('#url-input').focus();
 }
 
@@ -600,8 +630,7 @@ function renderTile(item) {
           stop(async () => {
             if (!confirm(`Remove “${item.title}” from your library? The file will be deleted.`)) return;
             if (player?.item.id === item.id) stopPlayer();
-            state.library = await api.library.remove(item.id);
-            renderLibrary();
+            applyLibrary(await api.library.remove(item.id));
           }),
         ),
       ),
@@ -618,22 +647,203 @@ function renderLibrary() {
         ['all', 'All'],
         ['video', 'Videos'],
         ['audio', 'Audio'],
+        ['playlists', state.playlists.length ? `Playlists ${state.playlists.length}` : 'Playlists'],
       ],
       state.libraryFilter,
       (filter) => {
         state.libraryFilter = filter;
+        state.openPlaylist = null;
         renderLibrary();
       },
     ),
   );
-  const items = libraryItems();
-  $('#library-grid').replaceChildren(...items.map(renderTile));
+  const grid = $('#library-grid');
+  const view = $('#library-playlist');
   const empty = $('#library-empty');
-  empty.hidden = items.length > 0;
-  if (all.length && !items.length) empty.textContent = 'Nothing matches.';
-  else empty.textContent = 'Your library is empty. Choose “Save to library” on a video to watch it here, even offline.';
+  const open = state.libraryFilter === 'playlists' && state.playlists.find((p) => p.id === state.openPlaylist);
+  if (!open) state.openPlaylist = null;
+  grid.hidden = Boolean(open);
+  view.hidden = !open;
+
+  if (open) {
+    view.replaceChildren(...renderPlaylistView(open));
+    empty.hidden = true;
+  } else if (state.libraryFilter === 'playlists') {
+    const query = state.librarySearch.trim().toLowerCase();
+    const lists = state.playlists.filter((p) => !query || `${p.title} ${p.uploader || ''}`.toLowerCase().includes(query));
+    grid.replaceChildren(...lists.map(renderPlaylistTile));
+    empty.hidden = lists.length > 0;
+    empty.textContent = state.playlists.length ? 'Nothing matches.' : 'No playlists yet. Open a playlist link and choose “Save to library”.';
+  } else {
+    const items = libraryItems();
+    grid.replaceChildren(...items.map(renderTile));
+    empty.hidden = items.length > 0;
+    if (all.length && !items.length) empty.textContent = 'Nothing matches.';
+    else empty.textContent = 'Your library is empty. Choose “Save to library” on a video to watch it here, even offline.';
+  }
   const size = all.reduce((total, i) => total + (i.size || 0), 0);
   $('#library-usage').textContent = all.length ? `${all.length} item${all.length === 1 ? '' : 's'} · ${formatBytes(size)} on this computer` : '';
+}
+
+function applyLibrary({ items, playlists }) {
+  state.library = items;
+  state.playlists = playlists;
+  renderLibrary();
+}
+
+// --- Library: playlists ---
+
+// The playlist's items that are in the library (some may still be downloading).
+function playlistItems(playlist) {
+  return playlist.entries.map((e) => state.library.find((i) => i.id === e.id)).filter(Boolean);
+}
+
+function playlistCover(playlist) {
+  const first = playlistItems(playlist)[0];
+  return first ? coverUrl(first) : playlist.thumbnail;
+}
+
+// "3 h 20 min", "45 min", "40 s"
+function formatTotal(seconds) {
+  if (seconds < 60) return `${Math.round(seconds)} s`;
+  const minutes = Math.round(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  return hours ? `${hours} h ${String(minutes % 60).padStart(2, '0')} min` : `${minutes} min`;
+}
+
+function renderPlaylistTile(playlist) {
+  const count = playlistItems(playlist).length;
+  return h(
+    'li',
+    {
+      class: 'tile playlist-tile',
+      title: playlist.title,
+      onclick: () => {
+        state.openPlaylist = playlist.id;
+        renderLibrary();
+        $('main').scrollTop = 0;
+      },
+    },
+    h(
+      'div',
+      { class: 'tile-art' },
+      thumb(playlistCover(playlist)),
+      h('span', { class: 'tile-play' }, icon('playlist')),
+      h('span', { class: 'playlist-count' }, icon('playlist'), `${count} item${count === 1 ? '' : 's'}`),
+    ),
+    h(
+      'div',
+      { class: 'tile-body' },
+      h(
+        'div',
+        { class: 'tile-text' },
+        h('div', { class: 'tile-title' }, playlist.title),
+        h('div', { class: 'row-sub' }, h('span', { class: 'tag' }, 'Playlist'), playlist.uploader ? h('span', {}, playlist.uploader) : null),
+      ),
+    ),
+  );
+}
+
+function renderPlaylistView(playlist) {
+  const query = state.librarySearch.trim().toLowerCase();
+  const items = playlistItems(playlist);
+  const pending = playlist.entries.length - items.length;
+  const total = items.reduce((t, i) => t + (i.duration || 0), 0);
+  const meta = [
+    playlist.uploader,
+    `${items.length} item${items.length === 1 ? '' : 's'}`,
+    total ? formatTotal(total) : null,
+    pending ? `${pending} still downloading` : null,
+  ].filter(Boolean);
+
+  const head = h(
+    'div',
+    { class: 'playlist-head' },
+    thumb(playlistCover(playlist)),
+    h(
+      'div',
+      { class: 'media-text' },
+      h('div', { class: 'playlist-title' }, playlist.title),
+      h('div', { class: 'muted' }, meta.join(' · ')),
+      h(
+        'div',
+        { class: 'playlist-actions' },
+        h('button', { class: 'btn primary', disabled: !items.length, onclick: () => playPlaylist(playlist, 0) }, icon('play'), 'Play all'),
+        h('button', { class: 'btn', disabled: items.length < 2, onclick: () => playPlaylist(playlist, 0, { shuffle: true }) }, icon('shuffle'), 'Shuffle'),
+        playlist.url ? h('button', { class: 'btn', onclick: () => api.openLink(playlist.url) }, 'Open original') : null,
+        iconButton('trash', 'Delete playlist', async () => {
+          if (!confirm(`Delete the playlist “${playlist.title}”? Its videos stay in your library.`)) return;
+          state.openPlaylist = null;
+          applyLibrary(await api.library.removePlaylist(playlist.id));
+        }),
+      ),
+    ),
+  );
+
+  const rows = items
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => !query || `${item.title} ${item.uploader || ''}`.toLowerCase().includes(query))
+    .map(({ item, index }) => {
+      const progress = item.duration && item.position ? Math.min(100, (item.position / item.duration) * 100) : 0;
+      return h(
+        'li',
+        { class: 'row clickable', onclick: () => playPlaylist(playlist, index) },
+        h('span', { class: 'row-index' }, index + 1),
+        thumb(coverUrl(item), true),
+        h(
+          'div',
+          { class: 'row-main' },
+          h('div', { class: 'row-title', title: item.title }, item.title),
+          h('div', { class: 'row-sub' }, item.uploader ? h('span', {}, item.uploader) : null, h('span', {}, formatDuration(item.duration))),
+          progress ? h('div', { class: 'progress' }, h('div', { style: `width: ${progress}%` })) : null,
+        ),
+        h(
+          'div',
+          { class: 'row-actions' },
+          iconButton('close', 'Remove from this playlist', async (e) => {
+            e.stopPropagation();
+            applyLibrary(await api.library.removeFromPlaylist(playlist.id, item.id));
+          }),
+        ),
+      );
+    });
+
+  return [
+    h(
+      'button',
+      {
+        class: 'link player-back',
+        onclick: () => {
+          state.openPlaylist = null;
+          renderLibrary();
+        },
+      },
+      icon('back'),
+      'Playlists',
+    ),
+    head,
+    h('ol', { class: 'rows playlist-rows' }, rows),
+  ];
+}
+
+function shuffled(list) {
+  const copy = [...list];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+function playPlaylist(playlist, start = 0, { shuffle = false } = {}) {
+  let order = playlistItems(playlist).map((i) => i.id);
+  if (!order.length) return;
+  if (shuffle) {
+    order = shuffled(order);
+    start = 0;
+  }
+  const item = state.library.find((i) => i.id === order[start]);
+  openPlayer(item, { queue: { playlistId: playlist.id, title: playlist.title, order, index: start, shuffle } });
 }
 
 // --- Player -----------------------------------------------------------------
@@ -685,6 +895,7 @@ const SHORTCUTS = [
   ['0 – 9', 'Jump to 0 % – 90 %'],
   ['Home / End', 'Start / end'],
   [`${CHAPTER_KEY} ← / →`, 'Previous / next chapter'],
+  ['Shift N / Shift P', 'Next / previous in a playlist'],
   ['Esc', 'Close a menu, leave the player'],
   ['?', 'This list'],
 ];
@@ -728,8 +939,13 @@ function seekChapter(step) {
   flash(null, chapters[Math.max(0, target)].title);
 }
 
-function openPlayer(item) {
-  if (player?.item.id === item.id) return expandPlayer();
+// queue: playing from a playlist ({ playlistId, title, order, index }).
+// mini: start in the mini player (the next song while browsing).
+function openPlayer(item, { queue = null, mini = false } = {}) {
+  if (player?.item.id === item.id) {
+    if (queue) player.queue = queue;
+    return expandPlayer();
+  }
   stopPlayer();
   const audio = item.kind === 'audio';
   const media = h(
@@ -758,7 +974,7 @@ function openPlayer(item) {
     Object.assign(item, { position, ...(duration ? { duration } : {}) });
     api.library.progress(item.id, { position, duration });
   };
-  player = { item, media, save, listeners, mini: false, chapter: null, track: null, segments: [] };
+  player = { item, media, save, listeners, queue, mini: false, chapter: null, track: null, segments: [] };
 
   on(media, 'loadedmetadata', () => {
     // Picks up where it was left, unless that was the very end.
@@ -784,7 +1000,10 @@ function openPlayer(item) {
     poke();
     requestAnimationFrame(tick);
   });
-  on(media, 'ended', () => save(0));
+  on(media, 'ended', () => {
+    save(0);
+    playAdjacent(1);
+  });
   on(media, 'ratechange', () => (state.speed = media.playbackRate));
   on(media, 'volumechange', () => {
     updateControls();
@@ -805,11 +1024,13 @@ function openPlayer(item) {
   if ('mediaSession' in navigator) {
     const cover = coverUrl(item);
     navigator.mediaSession.metadata = new MediaMetadata({ title: item.title, artist: item.uploader || '', artwork: cover ? [{ src: cover }] : [] });
+    // In a playlist these move between videos, otherwise between chapters.
     const chapters = chaptersOf(item).length > 0;
-    navigator.mediaSession.setActionHandler('previoustrack', chapters ? () => seekChapter(-1) : null);
-    navigator.mediaSession.setActionHandler('nexttrack', chapters ? () => seekChapter(1) : null);
+    navigator.mediaSession.setActionHandler('previoustrack', queue ? previousInQueue : chapters ? () => seekChapter(-1) : null);
+    navigator.mediaSession.setActionHandler('nexttrack', queue ? () => playAdjacent(1) : chapters ? () => seekChapter(1) : null);
   }
-  expandPlayer();
+  if (mini) minimizePlayer();
+  else expandPlayer();
 
   // Items saved by older versions have no description: fetch it once.
   if (item.description === undefined && item.url) {
@@ -921,8 +1142,14 @@ function expandPlayer() {
 
   const c = (player.ctl = {});
   c.play = ctl('play', 'Play (k)', togglePlay, 'filled');
-  c.prev = chapters.length ? ctl('prevChapter', `Previous chapter (${CHAPTER_KEY} ←)`, () => seekChapter(-1), 'filled') : null;
-  c.next = chapters.length ? ctl('nextChapter', `Next chapter (${CHAPTER_KEY} →)`, () => seekChapter(1), 'filled') : null;
+  // In a playlist the skip buttons move between videos, otherwise between chapters.
+  if (player.queue) {
+    c.prev = ctl('prevChapter', 'Previous (Shift P)', previousInQueue, 'filled');
+    c.next = ctl('nextChapter', 'Next (Shift N)', () => playAdjacent(1), 'filled');
+  } else if (chapters.length) {
+    c.prev = ctl('prevChapter', `Previous chapter (${CHAPTER_KEY} ←)`, () => seekChapter(-1), 'filled');
+    c.next = ctl('nextChapter', `Next chapter (${CHAPTER_KEY} →)`, () => seekChapter(1), 'filled');
+  }
   c.mute = ctl('volume', 'Mute (m)', toggleMute);
   c.volume = h('input', {
     type: 'range',
@@ -1040,6 +1267,7 @@ function expandPlayer() {
 
   $('#player').classList.toggle('theater', Boolean(state.settings.theater) && !audio);
   player.descriptionBox = renderDescription(item);
+  player.queueBox = renderQueueBox();
   $('#player').replaceChildren(...[
     h('button', { class: 'link player-back', onclick: () => selectTab('library') }, icon('back'), 'Library'),
     player.stage,
@@ -1059,6 +1287,7 @@ function expandPlayer() {
         item.url ? h('button', { class: 'btn small', onclick: () => api.openLink(item.url) }, 'Open original') : null,
       ),
     ),
+    player.queueBox,
     player.descriptionBox,
     player.chapterBox,
   ].filter(Boolean));
@@ -1070,6 +1299,8 @@ function expandPlayer() {
   $('main').scrollTop = 0;
   document.activeElement?.blur();
 
+  const current = player.queueBox?.querySelector('li.current');
+  if (current) current.parentElement.scrollTop = current.offsetTop - 4;
   player.chapter = null;
   applyCaptionStyle();
   renderCaptions();
@@ -1077,6 +1308,63 @@ function expandPlayer() {
   updateControls();
   updateTime();
   poke();
+}
+
+// --- Player: playlists ---
+
+// Plays the next (step 1) or previous (-1) item of the playlist, in the same
+// view (full or mini). Returns false at either end.
+function playAdjacent(step) {
+  const queue = player?.queue;
+  if (!queue) return false;
+  for (let index = queue.index + step; index >= 0 && index < queue.order.length; index += step) {
+    const item = state.library.find((i) => i.id === queue.order[index]);
+    if (item) {
+      openPlayer(item, { queue: { ...queue, index }, mini: player.mini });
+      return true;
+    }
+  }
+  return false;
+}
+
+// "Previous" restarts the video first, like a music player.
+function previousInQueue() {
+  if (!player) return;
+  if (player.media.currentTime > 3 || !playAdjacent(-1)) player.media.currentTime = 0;
+}
+
+// What is coming up, under the player.
+function renderQueueBox() {
+  const queue = player.queue;
+  if (!queue) return null;
+  const rows = queue.order.map((id, index) => {
+    const item = state.library.find((i) => i.id === id);
+    if (!item) return null;
+    const current = index === queue.index;
+    return h(
+      'li',
+      { class: current ? 'current' : null },
+      h(
+        'button',
+        { onclick: () => !current && openPlayer(item, { queue: { ...queue, index } }) },
+        h('span', { class: 'queue-index' }, current ? icon('play') : index + 1),
+        thumb(coverUrl(item), true),
+        h('span', { class: 'queue-item' }, h('span', { class: 'queue-item-title' }, item.title), h('span', { class: 'muted' }, item.uploader || '')),
+        h('span', { class: 'muted' }, formatDuration(item.duration)),
+      ),
+    );
+  });
+  return h(
+    'section',
+    { class: 'queue-box' },
+    h(
+      'div',
+      { class: 'queue-head' },
+      h('span', { class: 'queue-title' }, queue.shuffle ? `${queue.title} · shuffled` : queue.title),
+      h('span', { class: 'muted' }, `${queue.index + 1} / ${queue.order.length}`),
+    ),
+    h('ol', { class: 'queue-list' }, rows.filter(Boolean)),
+  );
 }
 
 function setupSeek(seek) {
@@ -1627,6 +1915,8 @@ function onPlayerKey(e) {
     else if (player.menuOpen) closeMenu();
     else if (!document.fullscreenElement) selectTab('library');
   } else if (chapterKey) seekChapter(key === 'ArrowLeft' ? -1 : 1);
+  else if (e.shiftKey && key === 'n') playAdjacent(1);
+  else if (e.shiftKey && key === 'p') previousInQueue();
   else if (key === ' ' || key === 'k') togglePlay();
   else if (key === 'j') skip(-10);
   else if (key === 'l') skip(10);
@@ -1764,12 +2054,8 @@ async function init() {
     renderQueue();
   });
 
-  state.library = await api.library.list();
-  renderLibrary();
-  api.library.onUpdate((items) => {
-    state.library = items;
-    renderLibrary();
-  });
+  applyLibrary(await api.library.list());
+  api.library.onUpdate(applyLibrary);
   $('#library-search').addEventListener('input', (e) => {
     state.librarySearch = e.target.value;
     renderLibrary();
