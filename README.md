@@ -147,3 +147,5 @@ All the hard work is done by [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [FFm
 ## License
 
 [MIT](LICENSE) © m1shko
+
+<p align="center"><sub>Made with <a href="https://claude.ai">Claude</a></sub></p>
