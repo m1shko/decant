@@ -53,6 +53,7 @@ const settings = jsonFile('settings.json', {
   audioQuality: '320',
   videoQuality: '1080',
   cookiesBrowser: '',
+  subtitleLang: '',
   lastEngineUpdate: 0,
 });
 

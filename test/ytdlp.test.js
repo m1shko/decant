@@ -58,6 +58,31 @@ test('library downloads keep a cover file and a fixed name', () => {
   assert.ok(!plain.includes('--write-thumbnail'));
 });
 
+test('library videos fetch subtitles, except for clips', () => {
+  const spec = { kind: 'video', format: 'mp4', quality: '1080', library: true, subtitles: ['fr', 'en'] };
+  const args = y.downloadArgs(job(spec), env);
+  assert.equal(after(args, '--sub-langs'), 'fr,en');
+  assert.ok(args.includes('subtitle:subs.%(ext)s'));
+  assert.ok(args.includes('--ignore-errors'));
+  const clip = y.downloadArgs(job({ ...spec, trim: { start: '10', end: '20' } }), env);
+  assert.ok(!clip.includes('--write-subs'));
+  const audio = y.downloadArgs(job({ ...spec, kind: 'audio', format: 'mp3', quality: '320' }), env);
+  assert.ok(!audio.includes('--write-subs'));
+  const plain = y.downloadArgs(job({ ...spec, library: false }), env);
+  assert.ok(!plain.includes('--write-subs') && !plain.includes('--ignore-errors'));
+});
+
+test('chapters line parsing', () => {
+  const line = 'DECANTCHAPTERS|[{"start_time": 0.0, "end_time": 63.5, "title": "Intro"}, {"start_time": 63.5, "end_time": 120, "title": ""}]';
+  assert.deepEqual(y.parseChaptersLine(line), [
+    { start: 0, end: 63.5, title: 'Intro' },
+    { start: 63.5, end: 120, title: 'Chapter 2' },
+  ]);
+  assert.deepEqual(y.parseChaptersLine('DECANTCHAPTERS|NA'), []);
+  assert.deepEqual(y.parseChaptersLine('DECANTCHAPTERS|null'), []);
+  assert.equal(y.parseChaptersLine('DECANTFILE|/x.mp4'), undefined);
+});
+
 test('cookies are passed through', () => {
   const args = y.downloadArgs(job({ kind: 'audio', format: 'm4a' }), { ...env, cookiesBrowser: 'firefox' });
   assert.equal(after(args, '--cookies-from-browser'), 'firefox');
