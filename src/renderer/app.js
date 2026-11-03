@@ -1766,7 +1766,7 @@ function renderPip() {
 }
 
 // Dragging the window anywhere but on the controls moves it; a click there
-// hides the controls.
+// hides the controls, or shows them again.
 function dragPip(e) {
   if (e.button !== 0 || e.target.closest('button, .pip-seek')) return;
   const root = e.currentTarget;
@@ -1786,7 +1786,8 @@ function dragPip(e) {
     root.removeEventListener('pointerup', end);
     root.removeEventListener('pointercancel', end);
     if (dragged) api.pip.drag('end');
-    else hidePipControls(from);
+    else if (root.classList.contains('active')) hidePipControls(from);
+    else pokePip();
   };
   root.addEventListener('pointermove', move);
   root.addEventListener('pointerup', end);
