@@ -1818,3 +1818,199 @@ body.dragging main {
 .queue-item .muted {
   font-size: 12px;
 }
+
+/* Picture in picture ---------------------------------------------------- */
+
+html.pip-window,
+html.pip-window body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+.pip {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  color: #fff;
+  container-type: inline-size;
+}
+
+.pip video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* The whole window drags it around; buttons and the seek bar opt out. */
+.pip-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: linear-gradient(rgb(0 0 0 / 60%), rgb(0 0 0 / 25%) 32%, rgb(0 0 0 / 25%) 62%, rgb(0 0 0 / 65%));
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  -webkit-app-region: drag;
+}
+
+.pip:hover .pip-overlay,
+.pip.paused .pip-overlay {
+  opacity: 1;
+}
+
+.pip-top {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 6px 0 12px;
+}
+
+.pip-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pip-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+
+.pip-bottom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px 8px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pip-btn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: #fff;
+  -webkit-app-region: no-drag;
+}
+
+.pip-btn:hover {
+  background: rgb(255 255 255 / 16%);
+}
+
+.pip-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2;
+}
+
+.pip-btn.big {
+  width: 50px;
+  height: 50px;
+  background: rgb(0 0 0 / 40%);
+}
+
+.pip-btn.big:hover {
+  background: var(--accent);
+}
+
+.pip-btn.big svg {
+  width: 24px;
+  height: 24px;
+}
+
+.pip-btn.filled svg {
+  fill: currentColor;
+}
+
+.pip-seek {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  height: 14px;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.pip-track {
+  width: 100%;
+  height: 3px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: rgb(255 255 255 / 30%);
+  transition: height 0.1s ease;
+}
+
+.pip-seek:hover .pip-track {
+  height: 5px;
+}
+
+.pip-fill {
+  height: 100%;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+.pip .captions {
+  bottom: 10px;
+}
+
+.pip:hover .captions,
+.pip.paused .captions {
+  bottom: 42px;
+}
+
+.pip .cue {
+  font-size: calc(clamp(11px, 3.8cqw, 34px) * var(--cap-scale, 1));
+}
+
+/* Where the video was, in the app */
+
+.pip-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 90px 24px;
+  color: rgb(255 255 255 / 80%);
+}
+
+.pip-placeholder svg {
+  width: 40px;
+  height: 40px;
+  stroke-width: 1.6;
+}
+
+.pip-placeholder .btn {
+  color: var(--text);
+}
+
+.mini-pip {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: rgb(255 255 255 / 70%);
+}
+
+.mini-pip svg {
+  width: 22px;
+  height: 22px;
+}
