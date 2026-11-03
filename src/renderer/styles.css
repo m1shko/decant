@@ -1847,7 +1847,7 @@ html.pip-window body {
   object-fit: contain;
 }
 
-/* The whole window drags it around; buttons and the seek bar opt out. */
+/* Dragged around by the page itself (see renderPip), so clicks reach it. */
 .pip-overlay {
   position: absolute;
   inset: 0;
@@ -1857,7 +1857,6 @@ html.pip-window body {
   background: linear-gradient(rgb(0 0 0 / 60%), rgb(0 0 0 / 25%) 32%, rgb(0 0 0 / 25%) 62%, rgb(0 0 0 / 65%));
   opacity: 0;
   transition: opacity 0.2s ease;
-  -webkit-app-region: drag;
 }
 
 .pip.active .pip-overlay {
@@ -1906,7 +1905,6 @@ html.pip-window body {
   border-radius: 50%;
   background: none;
   color: #fff;
-  -webkit-app-region: no-drag;
 }
 
 .pip-btn:hover {
@@ -1944,7 +1942,6 @@ html.pip-window body {
   align-items: center;
   height: 14px;
   cursor: pointer;
-  -webkit-app-region: no-drag;
 }
 
 .pip-track {

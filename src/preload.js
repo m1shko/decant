@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 const invoke = (channel) => (...args) => ipcRenderer.invoke(channel, ...args);
+const send = (channel) => (...args) => ipcRenderer.send(channel, ...args);
 const listen = (channel) => (callback) => {
   const handler = (_event, payload) => callback(payload);
   ipcRenderer.on(channel, handler);
@@ -40,7 +41,7 @@ contextBridge.exposeInMainWorld('decant', {
   },
   file: { exists: invoke('file:exists'), reveal: invoke('file:reveal'), open: invoke('file:open') },
   openLink: invoke('link:open'),
-  pip: { fit: invoke('pip:fit'), onPointer: listen('pip:pointer') },
+  pip: { fit: invoke('pip:fit'), drag: send('pip:drag'), onPointer: listen('pip:pointer') },
   focusWindow: invoke('window:focus'),
   readClipboard: invoke('clipboard:read'),
   engine: { version: invoke('engine:version'), update: invoke('engine:update'), onVersion: listen('engine:version') },
