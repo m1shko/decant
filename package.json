@@ -13,7 +13,8 @@
     "test": "node --test \"test/*.test.js\"",
     "dist": "electron-builder",
     "dist:mac": "electron-builder --mac",
-    "dist:win": "electron-builder --win"
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux"
   },
   "devDependencies": {
     "electron": "^45.2.1",
@@ -52,6 +53,16 @@
         "portable"
       ],
       "icon": "build/icon.png"
+    },
+    "linux": {
+      "target": [
+        "deb",
+        "AppImage"
+      ],
+      "icon": "build/icon.png",
+      "category": "AudioVideo",
+      "maintainer": "m1shko",
+      "synopsis": "Download audio or video from YouTube, Instagram, TikTok and many other sites."
     },
     "nsis": {
       "oneClick": false,

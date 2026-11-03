@@ -5,11 +5,11 @@
 # Decant
 
 **Paste a link, pick audio or video, done.**
-Download from YouTube, Instagram, TikTok and 1,000+ other sites — on Mac and Windows. No ads, no account, no limits.
+Download from YouTube, Instagram, TikTok and 1,000+ other sites — on Mac, Windows and Linux. No ads, no account, no limits.
 
 [![Build](https://github.com/m1shko/decant/actions/workflows/build.yml/badge.svg)](https://github.com/m1shko/decant/actions/workflows/build.yml)
 [![Latest release](https://img.shields.io/github/v/release/m1shko/decant?label=release&color=6d4aff)](https://github.com/m1shko/decant/releases/latest)
-![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey)
+![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)
 [![MIT license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [**Download**](#-install) · [Features](#-features) · [FAQ](#-faq) · [Development](#%EF%B8%8F-development)
@@ -50,6 +50,8 @@ Head to [**Releases**](https://github.com/m1shko/decant/releases/latest) and gra
 | macOS (Apple Silicon: M1, M2, M3…)    | `Decant-x.y.z-arm64.dmg`        |
 | Windows 10 / 11 (installer)           | `Decant.Setup.x.y.z.exe`        |
 | Windows (portable, no install)        | `Decant.x.y.z.exe`              |
+| Linux: Ubuntu, Debian, Mint…          | `decant_x.y.z_amd64.deb`        |
+| Linux: any other distribution         | `Decant-x.y.z.AppImage`         |
 
 Nothing else to install: everything Decant needs is bundled.
 
@@ -57,6 +59,8 @@ Nothing else to install: everything Decant needs is bundled.
 > **First launch on macOS:** go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to Decant.
 >
 > **On Windows:** click **More info → Run anyway** on the SmartScreen window.
+>
+> **On Linux:** install the `.deb` with `sudo apt install ./decant_x.y.z_amd64.deb`. For the AppImage, make it executable (`chmod +x Decant-x.y.z.AppImage`) and run it. On Ubuntu 24.04 and later the AppImage may refuse to start because of a sandbox restriction: use the `.deb` there, or run the AppImage with `--no-sandbox`.
 
 ## 🚀 How to use it
 
@@ -101,7 +105,7 @@ Sites change regularly. Decant updates its engine once a day, but you can force 
 </details>
 
 <details>
-<summary><b>What about Intel Macs or Linux?</b></summary>
+<summary><b>What about Intel Macs?</b></summary>
 
 There is no ready-made build yet, but Decant runs from source (see below), and `npm run dist:mac` on an Intel Mac produces an Intel build.
 </details>
@@ -123,9 +127,10 @@ Build the app:
 ```bash
 npm run dist:mac   # → dist/Decant-x.y.z-arm64.dmg  (on a Mac)
 npm run dist:win   # → dist/Decant Setup x.y.z.exe  (on Windows)
+npm run dist:linux # → dist/decant_x.y.z_amd64.deb and dist/Decant-x.y.z.AppImage  (on Linux)
 ```
 
-Every push to `main` builds both versions with GitHub Actions (*Actions* tab → artifacts). Pushing a `vX.Y.Z` tag publishes a release.
+Every push to `main` builds all three versions with GitHub Actions (*Actions* tab → artifacts). Pushing a `vX.Y.Z` tag publishes a release.
 
 ```
 src/
