@@ -22,7 +22,7 @@ Download from YouTube, Instagram, TikTok and 1,000+ other sites — on Mac and W
 
 ## ✨ Features
 
-|                         |                                                                                                       |
+| Feature                 | What it does                                                                                          |
 | ----------------------- | ----------------------------------------------------------------------------------------------------- |
 | 🎵 **Audio**             | MP3 (320 / 192 / 128 kbps), M4A (original audio, no quality loss), WAV, FLAC                          |
 | 🎬 **Video**             | MP4 from 360p to 4K, using H.264 whenever possible so it plays everywhere (QuickTime, Windows, phones) |
