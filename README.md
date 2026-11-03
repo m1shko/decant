@@ -56,7 +56,9 @@ Nothing else to install: everything Siphon needs is bundled.
 > [!NOTE]
 > Siphon is not signed with Apple or Microsoft (that costs a lot for a free project), so your system will complain the first time you open it:
 >
-> - **macOS**: right-click Siphon → **Open** → **Open**. If macOS says the app is "damaged", run this once in Terminal:
+> - **macOS**: drag Siphon into *Applications* and open it. When macOS says it can't verify the app, click **Done**, then go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. You only do this once.
+>
+>   If macOS says the app is "damaged" (Siphon 0.1.0 did this), run this once in Terminal:
 >   ```bash
 >   xattr -cr /Applications/Siphon.app
 >   ```
