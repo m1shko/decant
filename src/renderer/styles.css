@@ -1430,6 +1430,43 @@ body.dragging main {
   user-select: text;
 }
 
+.description {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.description-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.description.collapsed .description-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.description-text a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.description-text a:hover {
+  text-decoration: underline;
+}
+
+.description .link {
+  font-weight: 600;
+}
+
 .chapters-box {
   display: flex;
   flex-direction: column;
