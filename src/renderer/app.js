@@ -810,6 +810,79 @@ function openPlayer(item) {
     navigator.mediaSession.setActionHandler('nexttrack', chapters ? () => seekChapter(1) : null);
   }
   expandPlayer();
+
+  // Items saved by older versions have no description: fetch it once.
+  if (item.description === undefined && item.url) {
+    api.library
+      .refresh(item.id)
+      .then((fresh) => {
+        if (!fresh) return;
+        const gotChapters = !chaptersOf(item).length && chaptersOf(fresh).length > 0;
+        const { position, ...rest } = fresh;
+        Object.assign(item, rest);
+        if (player?.item !== item || player.mini) return;
+        if (gotChapters) return expandPlayer();
+        const box = renderDescription(item);
+        if (!box) return;
+        if (player.chapterBox) player.chapterBox.before(box);
+        else $('#player').append(box);
+        player.descriptionBox = box;
+      })
+      .catch(() => {});
+  }
+}
+
+// The description under the player: links open in the browser, timestamps seek.
+function renderDescription(item) {
+  const text = (item.description || '').trim();
+  if (!text) return null;
+  const body = h('div', { class: 'description-text' });
+  let last = 0;
+  for (const m of text.matchAll(/(https?:\/\/[^\s<>"]+)|(\b(?:\d{1,2}:)?\d{1,2}:\d{2}\b)/g)) {
+    body.append(text.slice(last, m.index));
+    last = m.index + m[0].length;
+    if (m[1]) {
+      const url = m[1].replace(/[).,;:!?'"]+$/, '');
+      body.append(h('a', { href: url, onclick: (e) => (e.preventDefault(), api.openLink(url)) }, url), m[1].slice(url.length));
+    } else {
+      const time = parseTime(m[2]);
+      body.append(
+        h(
+          'a',
+          {
+            href: '#',
+            class: 'timestamp',
+            onclick: (e) => {
+              e.preventDefault();
+              if (!player) return;
+              player.media.currentTime = time;
+              player.media.play();
+              $('main').scrollTo({ top: 0, behavior: 'smooth' });
+            },
+          },
+          m[2],
+        ),
+      );
+    }
+  }
+  body.append(text.slice(last));
+  const long = text.split('\n').length > 4 || text.length > 320;
+  const box = h('section', { class: `description${long ? ' collapsed' : ''}` }, body);
+  if (long) {
+    const toggle = h(
+      'button',
+      {
+        class: 'link',
+        onclick: () => {
+          const collapsed = box.classList.toggle('collapsed');
+          toggle.textContent = collapsed ? 'Show more' : 'Show less';
+        },
+      },
+      'Show more',
+    );
+    box.append(toggle);
+  }
+  return box;
 }
 
 // Smooth progress while playing (timeupdate only fires a few times a second).
@@ -966,7 +1039,8 @@ function expandPlayer() {
   player.chapterBox = chapters.length ? h('section', { class: 'chapters-box' }, h('h2', {}, 'Chapters'), player.chapterList) : null;
 
   $('#player').classList.toggle('theater', Boolean(state.settings.theater) && !audio);
-  $('#player').replaceChildren(
+  player.descriptionBox = renderDescription(item);
+  $('#player').replaceChildren(...[
     h('button', { class: 'link player-back', onclick: () => selectTab('library') }, icon('back'), 'Library'),
     player.stage,
     h(
@@ -985,8 +1059,9 @@ function expandPlayer() {
         item.url ? h('button', { class: 'btn small', onclick: () => api.openLink(item.url) }, 'Open original') : null,
       ),
     ),
+    player.descriptionBox,
     player.chapterBox,
-  );
+  ].filter(Boolean));
   $('#mini-player').replaceChildren();
   $('#mini-player').hidden = true;
   for (const tab of document.querySelectorAll('.tab')) tab.hidden = true;

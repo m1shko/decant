@@ -72,15 +72,19 @@ test('library videos fetch subtitles, except for clips', () => {
   assert.ok(!plain.includes('--write-subs') && !plain.includes('--ignore-errors'));
 });
 
-test('chapters line parsing', () => {
-  const line = 'DECANTCHAPTERS|[{"start_time": 0.0, "end_time": 63.5, "title": "Intro"}, {"start_time": 63.5, "end_time": 120, "title": ""}]';
-  assert.deepEqual(y.parseChaptersLine(line), [
-    { start: 0, end: 63.5, title: 'Intro' },
-    { start: 63.5, end: 120, title: 'Chapter 2' },
-  ]);
-  assert.deepEqual(y.parseChaptersLine('DECANTCHAPTERS|NA'), []);
-  assert.deepEqual(y.parseChaptersLine('DECANTCHAPTERS|null'), []);
-  assert.equal(y.parseChaptersLine('DECANTFILE|/x.mp4'), undefined);
+test('info line parsing', () => {
+  const line =
+    'DECANTINFO|{"chapters": [{"start_time": 0.0, "end_time": 63.5, "title": "Intro"}, {"start_time": 63.5, "end_time": 120, "title": ""}], "description": "Hi\\nthere"}';
+  assert.deepEqual(y.parseInfoLine(line), {
+    chapters: [
+      { start: 0, end: 63.5, title: 'Intro' },
+      { start: 63.5, end: 120, title: 'Chapter 2' },
+    ],
+    description: 'Hi\nthere',
+  });
+  assert.deepEqual(y.parseInfoLine('DECANTINFO|{"chapters": null}'), { chapters: [], description: '' });
+  assert.deepEqual(y.parseInfoLine('DECANTINFO|NA'), { chapters: [], description: '' });
+  assert.equal(y.parseInfoLine('DECANTFILE|/x.mp4'), undefined);
 });
 
 test('cookies are passed through', () => {

@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('decant', {
     remove: invoke('library:remove'),
     progress: invoke('library:progress'),
     export: invoke('library:export'),
+    refresh: invoke('library:refresh'),
     onUpdate: listen('library:update'),
   },
   file: { exists: invoke('file:exists'), reveal: invoke('file:reveal'), open: invoke('file:open') },

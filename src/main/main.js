@@ -102,6 +102,7 @@ function addToLibrary(job) {
     trim: job.trim || null,
     file,
     cover: names.includes('cover.jpg') ? 'cover.jpg' : null,
+    description: job.description || '',
     chapters: clipChapters(job.chapters, job.trim),
     subtitles,
     size,
@@ -253,6 +254,16 @@ function registerIpc() {
     });
   });
   ipcMain.handle('library:export', (_e, id) => exportLibraryItem(id));
+  // Fills in what items saved by older versions lack (needs the internet).
+  ipcMain.handle('library:refresh', async (_e, id) => {
+    const item = library.get(id);
+    if (!item?.url) return null;
+    const info = await probe(null, item.url);
+    const patch = { description: info.description || '' };
+    if (!item.chapters) patch.chapters = clipChapters(info.chapters, item.trim);
+    library.update(id, patch);
+    return library.get(id);
+  });
 
   ipcMain.handle('file:exists', (_e, file) => Boolean(file) && fs.existsSync(file));
   ipcMain.handle('file:reveal', (_e, file) => {
