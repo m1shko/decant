@@ -24,6 +24,11 @@
         one: 'It will show up in your library once downloaded.',
         other: '{n} items will show up in your library once downloaded.',
       },
+      '{n} selected': { one: '{n} selected', other: '{n} selected' },
+      'Remove {n} items from your library? Their files will be deleted.': {
+        one: 'Remove {n} item from your library? Its file will be deleted.',
+        other: 'Remove {n} items from your library? Their files will be deleted.',
+      },
     },
 
     fr: {
@@ -39,7 +44,7 @@
       Queue: 'File d’attente',
       'Clear finished': 'Effacer les terminés',
       'Nothing here yet. Paste a link to get started.': 'Rien pour l’instant. Collez un lien pour commencer.',
-      'Search your library': 'Rechercher dans la bibliothèque',
+      'Search your library': 'Rechercher',
       'Clear all': 'Tout effacer',
       'No downloads yet.': 'Aucun téléchargement pour l’instant.',
       Cookies: 'Cookies',
@@ -253,6 +258,16 @@
         'Cette vidéo est soumise à une limite d’âge : choisissez votre navigateur sous « Cookies » (en bas à gauche).',
       'Could not read the browser cookies: {error}': 'Impossible de lire les cookies du navigateur : {error}',
       'Network problem: check your internet connection.': 'Problème de réseau : vérifiez votre connexion internet.',
+      Select: 'Sélectionner',
+      '{n} selected': { one: '{n} sélectionné', other: '{n} sélectionnés' },
+      'Deselect all': 'Tout désélectionner',
+      'Save copies…': 'Enregistrer des copies…',
+      'Save copies to…': 'Enregistrer les copies dans…',
+      Remove: 'Retirer',
+      'Remove {n} items from your library? Their files will be deleted.': {
+        one: 'Retirer {n} élément de votre bibliothèque ? Son fichier sera supprimé.',
+        other: 'Retirer {n} éléments de votre bibliothèque ? Leurs fichiers seront supprimés.',
+      },
     },
 
     es: {
@@ -478,6 +493,16 @@
         'Este vídeo tiene restricción de edad: elige tu navegador en «Cookies» (abajo a la izquierda).',
       'Could not read the browser cookies: {error}': 'No se pudieron leer las cookies del navegador: {error}',
       'Network problem: check your internet connection.': 'Problema de red: comprueba tu conexión a internet.',
+      Select: 'Seleccionar',
+      '{n} selected': { one: '{n} seleccionado', other: '{n} seleccionados' },
+      'Deselect all': 'Deseleccionar todo',
+      'Save copies…': 'Guardar copias…',
+      'Save copies to…': 'Guardar las copias en…',
+      Remove: 'Quitar',
+      'Remove {n} items from your library? Their files will be deleted.': {
+        one: '¿Quitar {n} elemento de tu biblioteca? Se eliminará su archivo.',
+        other: '¿Quitar {n} elementos de tu biblioteca? Se eliminarán sus archivos.',
+      },
     },
 
     de: {
@@ -700,6 +725,16 @@
         'Dieses Video ist altersbeschränkt: Wähle deinen Browser unter „Cookies“ (unten links).',
       'Could not read the browser cookies: {error}': 'Die Browser-Cookies konnten nicht gelesen werden: {error}',
       'Network problem: check your internet connection.': 'Netzwerkproblem: Prüfe deine Internetverbindung.',
+      Select: 'Auswählen',
+      '{n} selected': '{n} ausgewählt',
+      'Deselect all': 'Auswahl aufheben',
+      'Save copies…': 'Kopien speichern …',
+      'Save copies to…': 'Kopien speichern in …',
+      Remove: 'Entfernen',
+      'Remove {n} items from your library? Their files will be deleted.': {
+        one: '{n} Element aus deiner Mediathek entfernen? Die Datei wird gelöscht.',
+        other: '{n} Elemente aus deiner Mediathek entfernen? Die Dateien werden gelöscht.',
+      },
     },
 
     it: {
@@ -925,6 +960,16 @@
         'Questo video ha limiti di età: scegli il tuo browser in «Cookie» (in basso a sinistra).',
       'Could not read the browser cookies: {error}': 'Impossibile leggere i cookie del browser: {error}',
       'Network problem: check your internet connection.': 'Problema di rete: controlla la connessione a internet.',
+      Select: 'Seleziona',
+      '{n} selected': { one: '{n} selezionato', other: '{n} selezionati' },
+      'Deselect all': 'Deseleziona tutto',
+      'Save copies…': 'Salva copie…',
+      'Save copies to…': 'Salva le copie in…',
+      Remove: 'Rimuovi',
+      'Remove {n} items from your library? Their files will be deleted.': {
+        one: 'Rimuovere {n} elemento dalla tua libreria? Il suo file verrà eliminato.',
+        other: 'Rimuovere {n} elementi dalla tua libreria? I loro file verranno eliminati.',
+      },
     },
 
     pt: {
@@ -1147,6 +1192,16 @@
         'Este vídeo tem restrição de idade: escolha seu navegador em “Cookies” (canto inferior esquerdo).',
       'Could not read the browser cookies: {error}': 'Não foi possível ler os cookies do navegador: {error}',
       'Network problem: check your internet connection.': 'Problema de rede: verifique sua conexão com a internet.',
+      Select: 'Selecionar',
+      '{n} selected': { one: '{n} selecionado', other: '{n} selecionados' },
+      'Deselect all': 'Desmarcar tudo',
+      'Save copies…': 'Salvar cópias…',
+      'Save copies to…': 'Salvar as cópias em…',
+      Remove: 'Remover',
+      'Remove {n} items from your library? Their files will be deleted.': {
+        one: 'Remover {n} item da sua biblioteca? O arquivo será apagado.',
+        other: 'Remover {n} itens da sua biblioteca? Os arquivos serão apagados.',
+      },
     },
   };
 
