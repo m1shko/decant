@@ -98,7 +98,7 @@ It isn't on the Chrome Web Store yet, so it installs in developer mode:
 3. Click **Load unpacked** and pick the **Decant-Extension** folder.
 4. Pin it: puzzle-piece icon in the toolbar → pin next to *Send to Decant*.
 
-The first time you send something, the browser asks whether to open Decant: tick **Always allow** and click **Open**.
+The first time you send something, the browser asks whether to open Decant: tick **Always allow** and click **Open**. It asks once for the buttons on YouTube and once for the toolbar button and right-click menu.
 
 To update, unzip the new version in the same place, replacing the old **Decant-Extension** folder, and click the ↻ button on the extension's card in `chrome://extensions`. Firefox and Safari aren't supported yet.
 
