@@ -25,6 +25,14 @@
     "appId": "lol.decant.app",
     "productName": "Decant",
     "afterSign": "scripts/sign-mac.js",
+    "protocols": [
+      {
+        "name": "Decant link",
+        "schemes": [
+          "decant"
+        ]
+      }
+    ],
     "directories": {
       "output": "dist"
     },

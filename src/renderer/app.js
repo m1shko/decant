@@ -165,7 +165,17 @@ function normalizeInput(raw) {
 
 let probeToken = 0;
 
-async function analyze(raw, { playlist = false } = {}) {
+// The video id in a playlist entry ("Youtube:dQw4w9WgXcQ" -> "dQw4w9WgXcQ").
+const entryId = (entry) => entry.key?.slice(entry.key.indexOf(':') + 1) || null;
+
+// The playlist entries a decant:// link picked (`only`), or null for all of them.
+function pickedEntries(info, only) {
+  if (info.type !== 'playlist' || !only) return null;
+  const ids = new Set(only);
+  return new Set(info.entries.flatMap((entry, i) => (ids.has(entryId(entry)) ? [i] : [])));
+}
+
+async function analyze(raw, { playlist = false, only = null } = {}) {
   const { input, search } = normalizeInput(raw);
   if (!input) return;
   const token = ++probeToken;
@@ -183,8 +193,9 @@ async function analyze(raw, { playlist = false } = {}) {
     // playlist entry selected.
     state.choice = defaultChoice();
     state.trim = { enabled: false, start: '', end: '' };
-    state.selected = new Set(info.type === 'playlist' ? info.entries.map((_, i) => i) : []);
+    state.selected = pickedEntries(info, only) || new Set(info.type === 'playlist' ? info.entries.map((_, i) => i) : []);
     renderPreview();
+    if (only && !state.selected.size) notice(t('None of the picked videos are in this playlist.'), 'error');
   } catch (err) {
     if (token !== probeToken) return;
     notice(cleanError(err), 'error');
@@ -205,8 +216,7 @@ function defaultChoice() {
   return { kind: s.defaultKind, audioFormat: s.defaultAudioFormat, audioQuality: s.defaultAudioQuality, videoQuality: s.defaultVideoQuality };
 }
 
-function settingsFor(info) {
-  const choice = state.choice;
+function settingsFor(info, choice = state.choice) {
   return { ...choice, kind: info.type === 'video' && !info.hasVideo ? 'audio' : choice.kind };
 }
 
@@ -332,8 +342,8 @@ function trimValue() {
   return { start: String(start), end: end == null ? null : String(end) };
 }
 
-function jobOptions(info) {
-  const opts = settingsFor(info);
+function jobOptions(info, choice = state.choice) {
+  const opts = settingsFor(info, choice);
   if (opts.kind === 'audio') {
     return { kind: 'audio', format: opts.audioFormat, quality: opts.audioFormat === 'mp3' ? opts.audioQuality : null };
   }
@@ -484,40 +494,89 @@ function renderSearch(info) {
   );
 }
 
-async function enqueue({ library = false } = {}) {
-  const info = state.info;
-  const opts = { ...jobOptions(info), library };
-  let specs;
-  let playlist = null;
+// The jobs for a probed link: the video, or the picked playlist entries
+// (`selected` holds their indexes, null for all), and for a playlist saved to
+// the library, the playlist itself.
+function specsFor(info, { library = false, choice = state.choice, selected = null, trim = null, input = null } = {}) {
+  const opts = { ...jobOptions(info, choice), library };
   if (info.type === 'video') {
-    const trim = trimValue();
-    if (trim === undefined) return;
-    const spec = { ...opts, ...videoSpec(info), library, title: info.title, uploader: info.uploader, duration: info.duration, thumbnail: info.thumbnail };
-    const owned = library && findInLibrary(spec);
-    if (owned) return openPlayer(owned);
-    specs = [spec];
-  } else {
-    specs = info.entries
-      .map((e, i) => ({ ...opts, key: e.key, url: e.url, title: e.title, uploader: e.uploader, duration: e.duration, thumbnail: e.thumbnail, trim: null, playlistIndex: i }))
-      .filter((_, i) => state.selected.has(i));
-    if (library) playlist = { key: info.key, title: info.title, uploader: info.uploader, url: state.probedInput, thumbnail: info.entries[0]?.thumbnail || null };
+    const spec = { ...opts, key: info.key, url: info.url || input, trim, title: info.title, uploader: info.uploader, duration: info.duration, thumbnail: info.thumbnail };
+    return { specs: [spec], playlist: null };
   }
-  const result = await api.queue.add(specs, { playlist });
-  state.info = null;
-  $('#url-input').value = '';
-  renderPreview();
+  const specs = info.entries
+    .map((e, i) => ({ ...opts, key: e.key, url: e.url, title: e.title, uploader: e.uploader, duration: e.duration, thumbnail: e.thumbnail, trim: null, playlistIndex: i }))
+    .filter((_, i) => !selected || selected.has(i));
+  const playlist = library ? { key: info.key, title: info.title, uploader: info.uploader, url: input, thumbnail: info.entries[0]?.thumbnail || null } : null;
+  return { specs, playlist };
+}
+
+// What to tell once jobs are queued ('' when the queue says enough).
+function queuedMessage(result, { specs, playlist, library }) {
   if (playlist) {
     const parts = [
       result.added && t('{n} downloading', { n: result.added }),
       result.existing && t('{n} already in your library, not downloaded again', { n: result.existing }),
     ];
-    notice(t('Playlist “{title}” saved to your library: {details}.', { title: playlist.title, details: parts.filter(Boolean).join(', ') }));
-  } else if (library) {
-    notice(t('{n} items will show up in your library once downloaded.', { n: specs.length }));
-  } else {
-    notice(specs.length > 1 ? t('{n} items added to the queue.', { n: specs.length }) : '');
+    return t('Playlist “{title}” saved to your library: {details}.', { title: playlist.title, details: parts.filter(Boolean).join(', ') });
   }
+  if (library) return t('{n} items will show up in your library once downloaded.', { n: specs.length });
+  return specs.length > 1 ? t('{n} items added to the queue.', { n: specs.length }) : '';
+}
+
+async function enqueue({ library = false } = {}) {
+  const info = state.info;
+  const trim = info.type === 'video' ? trimValue() : null;
+  if (trim === undefined) return;
+  const { specs, playlist } = specsFor(info, { library, selected: state.selected, trim, input: state.probedInput });
+  const owned = library && info.type === 'video' && findInLibrary(specs[0]);
+  if (owned) return openPlayer(owned);
+  const result = await api.queue.add(specs, { playlist });
+  state.info = null;
+  $('#url-input').value = '';
+  renderPreview();
+  notice(queuedMessage(result, { specs, playlist, library }));
   $('#url-input').focus();
+}
+
+// --- Links from the browser (decant://) ---------------------------------------
+
+// "Send to Decant": show the link, ready to download, with the videos the
+// browser picked already ticked.
+async function openLink({ url, only }) {
+  selectTab('download');
+  $('#url-input').value = url;
+  state.lastClipboard = url;
+  await analyze(url, { playlist: Boolean(only), only });
+}
+
+// "Save to Decant": straight to the library with the default choices, without
+// taking the user away from what they are watching here.
+async function saveLink({ url, only }) {
+  try {
+    const info = await api.probe(url, { playlist: Boolean(only) });
+    const { specs, playlist } = specsFor(info, { library: true, choice: defaultChoice(), selected: pickedEntries(info, only), input: url });
+    if (!specs.length) throw new Error(t('None of the picked videos are in this playlist.'));
+    const result = await api.queue.add(specs, { playlist });
+    const message =
+      info.type === 'video' && !result.added ? t('“{title}” is already in your library.', { title: info.title }) : queuedMessage(result, { specs, playlist, library: true });
+    notice(message);
+    notify(info.title, message);
+  } catch (err) {
+    notice(cleanError(err), 'error');
+    notify(t('Could not save to the library'), cleanError(err));
+  }
+}
+
+function notify(title, body) {
+  if (document.hasFocus()) return;
+  try {
+    const note = new Notification(title, { body, silent: true });
+    note.onclick = () => api.focusWindow();
+  } catch {}
+}
+
+function receiveLink(link) {
+  return link.action === 'save' ? saveLink(link) : openLink(link);
 }
 
 // --- Queue ------------------------------------------------------------------
@@ -2572,8 +2631,11 @@ async function init() {
     }
   });
 
+  api.links.onIncoming(receiveLink);
+  const links = await api.links.ready();
   window.addEventListener('focus', pasteFromClipboard);
-  pasteFromClipboard();
+  if (links.length) for (const link of links) receiveLink(link);
+  else pasteFromClipboard();
   $('#url-input').focus();
 }
 

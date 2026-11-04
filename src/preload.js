@@ -44,6 +44,7 @@ contextBridge.exposeInMainWorld('decant', {
   openLink: invoke('link:open'),
   pip: { fit: invoke('pip:fit'), drag: send('pip:drag'), onPointer: listen('pip:pointer') },
   focusWindow: invoke('window:focus'),
+  links: { ready: invoke('links:ready'), onIncoming: listen('link:incoming') },
   readClipboard: invoke('clipboard:read'),
   engine: { version: invoke('engine:version'), update: invoke('engine:update'), onVersion: listen('engine:version') },
 });
