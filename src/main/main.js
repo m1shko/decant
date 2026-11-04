@@ -381,7 +381,8 @@ function receiveLink(raw) {
   else pendingLinks.push(link);
   if (!app.isReady()) return;
   if (!win || win.isDestroyed()) createWindow();
-  else focusWindow();
+  // Saving happens in the background: only "open" needs the window.
+  else if (link.action === 'open') focusWindow();
 }
 
 // macOS hands links over with an event, also while launching.
