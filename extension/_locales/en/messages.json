@@ -1,0 +1,119 @@
+{
+  "extName": {
+    "message": "Send to Decant"
+  },
+  "extDescription": {
+    "message": "Send a video, a playlist or any page to the Decant app in one click."
+  },
+  "actionTitle": {
+    "message": "Send this page to Decant"
+  },
+  "sentTitle": {
+    "message": "Sent to Decant"
+  },
+  "savedTitle": {
+    "message": "Saving to your Decant library"
+  },
+  "nothingToSend": {
+    "message": "Nothing on this page that Decant can open"
+  },
+  "menuOpenLink": {
+    "message": "Send link to Decant"
+  },
+  "menuSaveLink": {
+    "message": "Save link to the Decant library"
+  },
+  "menuOpenPage": {
+    "message": "Send this page to Decant"
+  },
+  "menuSavePage": {
+    "message": "Save this page to the Decant library"
+  },
+  "sendVideo": {
+    "message": "Send to Decant"
+  },
+  "sendPlaylist": {
+    "message": "Send playlist"
+  },
+  "sendPlaylistLong": {
+    "message": "Send the whole playlist to Decant"
+  },
+  "playlist": {
+    "message": "Playlist"
+  },
+  "pickVideos": {
+    "message": "Pick videos"
+  },
+  "pickHint": {
+    "message": "Click videos to pick them, Shift-click for a range"
+  },
+  "pickedCount": {
+    "message": "Selected: $COUNT$",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "selectAll": {
+    "message": "All"
+  },
+  "selectNone": {
+    "message": "None"
+  },
+  "sendPicked": {
+    "message": "Send $COUNT$",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "cancel": {
+    "message": "Cancel"
+  },
+  "altSave": {
+    "message": "Alt-click: save straight to the library"
+  },
+  "altOpen": {
+    "message": "Alt-click: open in Decant to choose the format"
+  },
+  "toastSent": {
+    "message": "Sent to Decant"
+  },
+  "toastSaved": {
+    "message": "Saving to your Decant library"
+  },
+  "toastSentMany": {
+    "message": "Videos sent to Decant: $COUNT$",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "toastHint": {
+    "message": "Nothing happened? Decant must be installed and opened once."
+  },
+  "getDecant": {
+    "message": "Get Decant"
+  },
+  "optionsAction": {
+    "message": "What the button does"
+  },
+  "optionOpen": {
+    "message": "Open in Decant, to pick video or audio and the quality"
+  },
+  "optionSave": {
+    "message": "Save straight to the Decant library, with the defaults from Decant's Settings"
+  },
+  "optionsAlt": {
+    "message": "Alt-click (Option-click on a Mac) a button on YouTube to do the other one."
+  },
+  "optionThumbnails": {
+    "message": "Show the button over thumbnails"
+  }
+}
