@@ -108,9 +108,27 @@ body.mac .titlebar {
 }
 
 .tabs {
+  flex: 1;
   display: flex;
   gap: 4px;
+}
+
+/* The bar between the tabs and the gear still drags the window. */
+.tabs button {
   -webkit-app-region: no-drag;
+}
+
+/* Settings: a gear at the right end of the title bar. */
+.tabs .tab-settings {
+  display: grid;
+  place-items: center;
+  margin-left: auto;
+  padding: 6px;
+}
+
+.tab-settings svg {
+  width: 20px;
+  height: 20px;
 }
 
 .tabs button {
