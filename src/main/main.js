@@ -1,7 +1,9 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, protocol, screen } = require('electron');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { execFile } = require('node:child_process');
 const { Readable } = require('node:stream');
 const ytdlp = require('./ytdlp');
 const binaries = require('./binaries');
@@ -9,6 +11,12 @@ const { settings, history, library, sameMedia } = require('./store');
 const i18n = require('../renderer/i18n.js');
 const { t } = i18n;
 const { Queue } = require('./queue');
+const links = require('./links');
+
+// One Decant at a time: a decant:// link opened while it runs goes to the
+// window already open (see 'second-instance').
+const singleInstance = app.requestSingleInstanceLock();
+if (!singleInstance) app.quit();
 
 // The player reads library files through decant-media://<id>/media (and
 // /cover, /subs/<lang>). Subtitle tracks are fetched with CORS, hence corsEnabled.
@@ -338,12 +346,10 @@ function registerIpc() {
 
   ipcMain.handle('pip:fit', (_e, ratio) => fitPip(ratio));
   ipcMain.on('pip:drag', (_e, phase) => dragPip(phase));
-  ipcMain.handle('window:focus', () => {
-    if (!win || win.isDestroyed()) return;
-    if (win.isMinimized()) win.restore();
-    win.show();
-    if (process.platform === 'darwin') app.focus({ steal: true });
-    win.focus();
+  ipcMain.handle('window:focus', focusWindow);
+  ipcMain.handle('links:ready', () => {
+    linksReady = true;
+    return pendingLinks.splice(0);
   });
 
   ipcMain.handle('engine:version', () => binaries.version().catch(() => null));
@@ -352,6 +358,70 @@ function registerIpc() {
     settings.set({ lastEngineUpdate: Date.now() });
     return version;
   });
+}
+
+function focusWindow() {
+  if (!win || win.isDestroyed()) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  if (process.platform === 'darwin') app.focus({ steal: true });
+  win.focus();
+}
+
+// --- decant:// links ----------------------------------------------------------
+// Links that arrive before the interface is listening wait in pendingLinks.
+
+let pendingLinks = [];
+let linksReady = false;
+
+function receiveLink(raw) {
+  const link = links.parseDecantUrl(raw);
+  if (!link) return;
+  if (linksReady && win && !win.isDestroyed()) send('link:incoming', link);
+  else pendingLinks.push(link);
+  if (!app.isReady()) return;
+  if (!win || win.isDestroyed()) createWindow();
+  else focusWindow();
+}
+
+// macOS hands links over with an event, also while launching.
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  receiveLink(url);
+});
+
+// Windows and Linux start a second Decant with the link as an argument.
+app.on('second-instance', (_event, argv) => {
+  const raw = links.findDecantUrl(argv);
+  if (raw) receiveLink(raw);
+  else if (!win || win.isDestroyed()) createWindow();
+  else focusWindow();
+});
+
+// The installed app answers decant:// links. macOS and the Linux .deb learn it
+// from the package (see "protocols" in package.json); Windows from this call.
+// Not from `npm start`, which would take the links from an installed Decant.
+function registerLinkHandler() {
+  if (process.defaultApp) return;
+  app.setAsDefaultProtocolClient(links.SCHEME);
+  if (process.platform === 'linux' && process.env.APPIMAGE) registerAppImageLinkHandler(process.env.APPIMAGE);
+}
+
+// An AppImage is not installed: tell the desktop which file opens decant:// links.
+function registerAppImageLinkHandler(appImage) {
+  const dir = path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'applications');
+  const name = 'decant-url-handler.desktop';
+  const exec = `"${appImage.replace(/["`$\\]/g, '\\$&')}" %u`;
+  const entry = ['[Desktop Entry]', 'Type=Application', 'Name=Decant', `Exec=${exec}`, 'NoDisplay=true', 'MimeType=x-scheme-handler/decant;', ''].join('\n');
+  try {
+    const file = path.join(dir, name);
+    if (fs.existsSync(file) && fs.readFileSync(file, 'utf8') === entry) return;
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(file, entry);
+    execFile('xdg-mime', ['default', name, 'x-scheme-handler/decant'], () => {});
+  } catch (err) {
+    console.warn('[decant] could not register decant:// links:', err.message);
+  }
 }
 
 // The picture-in-picture window: a small frameless window the player opens
@@ -445,6 +515,7 @@ function fitPip(ratio) {
 }
 
 function createWindow() {
+  linksReady = false;
   win = new BrowserWindow({
     width: 980,
     height: 760,
@@ -470,15 +541,24 @@ function createWindow() {
   win.webContents.on('did-create-window', (child, { frameName }) => {
     if (frameName === PIP_NAME) setupPip(child);
   });
-  win.on('closed', () => pipWin && !pipWin.isDestroyed() && pipWin.close());
+  win.webContents.on('did-start-loading', () => (linksReady = false));
+  win.on('closed', () => {
+    linksReady = false;
+    if (pipWin && !pipWin.isDestroyed()) pipWin.close();
+  });
 }
 
 app.whenReady().then(() => {
+  if (!singleInstance) return;
   i18n.setLanguage(settings.get().language, app.getLocale());
   library.prune();
   protocol.handle('decant-media', serveLibrary);
   registerIpc();
-  createWindow();
+  registerLinkHandler();
+  const launchLink = links.parseDecantUrl(links.findDecantUrl(process.argv));
+  if (launchLink) pendingLinks.push(launchLink);
+  // A link opened on macOS right as Decant started may have opened it already.
+  if (!win) createWindow();
   autoUpdateEngine();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
