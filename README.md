@@ -124,6 +124,18 @@ On macOS, Chrome may ask for Keychain access (click *Always Allow*), and Safari 
 </details>
 
 <details>
+<summary><b>On macOS, Decant's icon keeps bouncing in the Dock and nothing opens</b></summary>
+
+macOS is checking Decant before letting it start, and that check got stuck: no window shows up and Decant waits forever. This can happen after several tries at opening a new download.
+
+1. Right-click the bouncing icon → **Force Quit**.
+2. **Restart your Mac**, which unblocks macOS's check.
+3. Open Decant from the Applications folder, outside full-screen apps so macOS's window can show up. If macOS says it can't verify Decant, click **Done**, then go to **System Settings → Privacy & Security**, click **Open Anyway** next to “Decant.app” and confirm with **Open**.
+
+Each new copy of Decant needs this once, even if you allowed an earlier one.
+</details>
+
+<details>
 <summary><b>Nothing happens when I click “Send to Decant”</b></summary>
 
 The browser hands the video over through a `decant://` link, which your system must know belongs to Decant:
