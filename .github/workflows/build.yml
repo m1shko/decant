@@ -39,6 +39,10 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
+      # The browser extension is the same for every system: packed once.
+      - if: runner.os == 'Linux'
+        run: npm run pack:extension
+
       # The bundled tools must run, and the app must open and stay up.
       - if: runner.os == 'Linux'
         run: |

@@ -15,7 +15,8 @@
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win",
     "dist:linux": "electron-builder --linux",
-    "test:extension": "node scripts/test-extension.mjs"
+    "test:extension": "node scripts/test-extension.mjs",
+    "pack:extension": "node scripts/pack-extension.mjs"
   },
   "devDependencies": {
     "electron": "^45.2.1",
