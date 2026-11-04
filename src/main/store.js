@@ -49,10 +49,12 @@ function jsonFile(name, fallback) {
 
 const settings = jsonFile('settings.json', {
   outputDir: null,
-  kind: 'audio',
-  audioFormat: 'mp3',
-  audioQuality: '320',
-  videoQuality: '1080',
+  language: '',
+  // What a new link downloads; the preview can change it for that link.
+  defaultKind: 'video',
+  defaultVideoQuality: 'best',
+  defaultAudioFormat: 'mp3',
+  defaultAudioQuality: '320',
   cookiesBrowser: '',
   subtitleLang: '',
   captionStyle: {},

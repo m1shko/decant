@@ -105,7 +105,7 @@ function formatDuration(seconds) {
 function parseTime(text) {
   const parts = String(text).trim().split(':');
   if (!text || parts.length > 3 || parts.some((p) => !/^\d+(\.\d+)?$/.test(p))) return null;
-  return parts.reduce((t, p) => t * 60 + Number(p), 0);
+  return parts.reduce((total, p) => total * 60 + Number(p), 0);
 }
 
 function formatBytes(n) {
@@ -116,13 +116,16 @@ function formatBytes(n) {
     n /= 1024;
     i++;
   }
-  return `${n.toFixed(n < 10 && i ? 1 : 0)} ${units[i]}`;
+  const digits = n < 10 && i ? 1 : 0;
+  return `${new Intl.NumberFormat(currentLanguage(), { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(n)} ${t(units[i])}`;
 }
 
 function formatLabel({ kind, format, quality }) {
   if (kind === 'audio') return format === 'mp3' ? `MP3 ${quality} kbps` : format.toUpperCase();
-  return `MP4 ${quality === 'best' ? 'max' : `${quality}p`}`;
+  return `MP4 ${quality === 'best' ? t('max') : `${quality}p`}`;
 }
+
+const heightLabel = (height) => (height >= 2160 ? '4K' : height === 1440 ? '2K' : `${height}p`);
 
 function sourceName(source) {
   if (!source) return null;
@@ -168,13 +171,15 @@ async function analyze(raw, { playlist = false } = {}) {
   state.probedInput = input;
   $('#preview').replaceChildren();
   $('#analyze-btn').disabled = true;
-  notice(search ? `Searching for “${input}”…` : 'Reading the link…', 'loading');
+  notice(search ? t('Searching for “{query}”…', { query: input }) : t('Reading the link…'), 'loading');
   try {
     const info = await api.probe(input, { playlist, search });
     if (token !== probeToken) return;
     notice('');
     state.info = { ...info, isSearch: search, canExpand: info.type === 'video' && !playlist && /[?&]list=/.test(input) };
-    // A new preview starts with no trim and every playlist entry selected.
+    // A new preview starts from the default choices, with no trim and every
+    // playlist entry selected.
+    state.choice = defaultChoice();
     state.trim = { enabled: false, start: '', end: '' };
     state.selected = new Set(info.type === 'playlist' ? info.entries.map((_, i) => i) : []);
     renderPreview();
@@ -192,15 +197,19 @@ function cleanError(err) {
 
 // --- Preview ----------------------------------------------------------------
 
-function settingsFor(info) {
+// The defaults from Settings: a preview can change them for one link only.
+function defaultChoice() {
   const s = state.settings;
-  const kind = info.type === 'video' && !info.hasVideo ? 'audio' : s.kind;
-  return { kind, audioFormat: s.audioFormat, audioQuality: s.audioQuality, videoQuality: s.videoQuality };
+  return { kind: s.defaultKind, audioFormat: s.defaultAudioFormat, audioQuality: s.defaultAudioQuality, videoQuality: s.defaultVideoQuality };
 }
 
-function saveSetting(patch) {
-  Object.assign(state.settings, patch);
-  api.settings.set(patch);
+function settingsFor(info) {
+  const choice = state.choice;
+  return { ...choice, kind: info.type === 'video' && !info.hasVideo ? 'audio' : choice.kind };
+}
+
+function choose(patch) {
+  Object.assign(state.choice, patch);
   renderPreview();
 }
 
@@ -217,33 +226,33 @@ function segmented(options, current, onPick) {
 function renderOptions(info, opts) {
   const rows = [];
   rows.push(
-    h('span', { class: 'label' }, 'Type'),
+    h('span', { class: 'label' }, t('Type')),
     segmented(
       [
-        ['audio', 'Audio'],
-        ['video', 'Video', info.type === 'video' && !info.hasVideo],
+        ['video', t('Video'), info.type === 'video' && !info.hasVideo],
+        ['audio', t('Audio')],
       ],
       opts.kind,
-      (kind) => saveSetting({ kind }),
+      (kind) => choose({ kind }),
     ),
   );
 
   if (opts.kind === 'audio') {
     rows.push(
-      h('span', { class: 'label' }, 'Format'),
+      h('span', { class: 'label' }, t('Format')),
       segmented(
         AUDIO_FORMATS.map((f) => [f, f.toUpperCase()]),
         opts.audioFormat,
-        (audioFormat) => saveSetting({ audioFormat }),
+        (audioFormat) => choose({ audioFormat }),
       ),
-      h('span', { class: 'label' }, 'Quality'),
+      h('span', { class: 'label' }, t('Quality')),
     );
     if (opts.audioFormat === 'mp3') {
       rows.push(
         segmented(
           MP3_BITRATES.map((b) => [b, `${b} kbps`]),
           opts.audioQuality,
-          (audioQuality) => saveSetting({ audioQuality }),
+          (audioQuality) => choose({ audioQuality }),
         ),
       );
     } else {
@@ -252,32 +261,32 @@ function renderOptions(info, opts) {
         wav: 'Lossless, uncompressed (large file, no cover art).',
         flac: 'Lossless, compressed.',
       };
-      rows.push(h('span', { class: 'hint' }, hints[opts.audioFormat]));
+      rows.push(h('span', { class: 'hint' }, t(hints[opts.audioFormat])));
     }
   } else {
     const heights = info.type === 'video' ? info.heights : ALL_HEIGHTS;
     const quality = opts.videoQuality === 'best' || heights.includes(Number(opts.videoQuality)) ? opts.videoQuality : 'best';
     rows.push(
-      h('span', { class: 'label' }, 'Format'),
+      h('span', { class: 'label' }, t('Format')),
       segmented([['mp4', 'MP4']], 'mp4', () => {}),
-      h('span', { class: 'label' }, 'Quality'),
+      h('span', { class: 'label' }, t('Quality')),
       h(
         'div',
         {},
         segmented(
-          [['best', 'Best'], ...heights.map((x) => [String(x), x >= 2160 ? '4K' : x === 1440 ? '2K' : `${x}p`])],
+          [['best', t('Best')], ...heights.map((x) => [String(x), heightLabel(x)])],
           quality,
-          (videoQuality) => saveSetting({ videoQuality }),
+          (videoQuality) => choose({ videoQuality }),
         ),
         Number(quality) > 1080 || (quality === 'best' && Math.max(...heights) > 1080)
-          ? h('div', { class: 'hint' }, 'Above 1080p the video is VP9/AV1: plays in VLC or IINA, and in QuickTime on recent Macs.')
+          ? h('div', { class: 'hint' }, t('Above 1080p the video is VP9/AV1: plays in VLC or IINA, and in QuickTime on recent Macs.'))
           : null,
       ),
     );
     opts.videoQuality = quality;
   }
 
-  if (info.type === 'video' && info.duration) rows.push(h('span', { class: 'label' }, 'Clip'), renderTrim(info));
+  if (info.type === 'video' && info.duration) rows.push(h('span', { class: 'label' }, t('Clip')), renderTrim(info));
   return h('div', { class: 'options' }, rows);
 }
 
@@ -296,7 +305,7 @@ function renderTrim(info) {
       type: 'text',
       value: trim[key],
       placeholder,
-      'aria-label': key === 'start' ? 'Start' : 'End',
+      'aria-label': key === 'start' ? t('Start') : t('End'),
       class: trim[key] && parseTime(trim[key]) == null ? 'invalid' : null,
       oninput: (e) => {
         trim[key] = e.target.value;
@@ -307,8 +316,8 @@ function renderTrim(info) {
   return h(
     'div',
     { class: 'trim' },
-    h('label', { class: 'toggle' }, toggle, 'Only part of it'),
-    trim.enabled ? [h('span', { class: 'hint' }, 'from'), field('start', '0:00'), h('span', { class: 'hint' }, 'to'), field('end', formatDuration(info.duration))] : null,
+    h('label', { class: 'toggle' }, toggle, t('Only part of it')),
+    trim.enabled ? [h('span', { class: 'hint' }, t('from')), field('start', '0:00'), h('span', { class: 'hint' }, t('to')), field('end', formatDuration(info.duration))] : null,
   );
 }
 
@@ -350,17 +359,17 @@ function updateDownloadButton() {
   if (info.type === 'video') {
     const trim = trimValue();
     btn.disabled = libraryBtn.disabled = trim === undefined;
-    btn.lastChild.textContent = `Download · ${formatLabel(jobOptions(info))}`;
-    libraryBtn.lastChild.textContent = trim !== undefined && findInLibrary(videoSpec(info)) ? 'Play from library' : 'Save to library';
+    btn.lastChild.textContent = t('Download · {format}', { format: formatLabel(jobOptions(info)) });
+    libraryBtn.lastChild.textContent = trim !== undefined && findInLibrary(videoSpec(info)) ? t('Play from library') : t('Save to library');
   } else {
     const count = state.selected.size;
     btn.disabled = libraryBtn.disabled = count === 0;
-    btn.lastChild.textContent = `Add ${count} item${count === 1 ? '' : 's'} · ${formatLabel(jobOptions(info))}`;
-    libraryBtn.lastChild.textContent = `Save ${count} to library`;
+    btn.lastChild.textContent = t('Add {n} items · {format}', { n: count, format: formatLabel(jobOptions(info)) });
+    libraryBtn.lastChild.textContent = t('Save {n} to library', { n: count });
     const known = info.entries.filter((e, i) => state.selected.has(i) && findInLibrary({ ...jobOptions(info), key: e.key, url: e.url })).length;
     const hint = $('#library-hint');
     hint.hidden = !known;
-    hint.textContent = `${known} of these ${known === 1 ? 'is' : 'are'} already in your library: saving adds ${known === 1 ? 'it' : 'them'} to the playlist without downloading again.`;
+    hint.textContent = t('{n} of these are already in your library: saving adds them to the playlist without downloading again.', { n: known });
   }
 }
 
@@ -373,7 +382,7 @@ function renderPreview() {
   const opts = settingsFor(info);
   const isPlaylist = info.type === 'playlist';
   const meta = isPlaylist
-    ? [`${info.entries.length} item${info.entries.length === 1 ? '' : 's'}`, info.uploader].filter(Boolean).join(' · ')
+    ? [t('{n} items', { n: info.entries.length }), info.uploader].filter(Boolean).join(' · ')
     : [info.uploader, formatDuration(info.duration)].filter(Boolean).join(' · ');
 
   const card = h(
@@ -386,11 +395,11 @@ function renderPreview() {
       h(
         'div',
         { class: 'media-text' },
-        sourceName(info.source) ? h('span', { class: 'chip-source' }, isPlaylist ? `${sourceName(info.source)} playlist` : sourceName(info.source)) : null,
+        sourceName(info.source) ? h('span', { class: 'chip-source' }, isPlaylist ? t('{source} playlist', { source: sourceName(info.source) }) : sourceName(info.source)) : null,
         h('div', { class: 'media-title', title: info.title }, info.title),
         h('div', { class: 'muted' }, meta),
         info.canExpand
-          ? h('button', { class: 'link', onclick: () => analyze(state.probedInput, { playlist: true }) }, 'This link is part of a playlist: show all of it')
+          ? h('button', { class: 'link', onclick: () => analyze(state.probedInput, { playlist: true }) }, t('This link is part of a playlist: show all of it'))
           : null,
       ),
     ),
@@ -420,7 +429,7 @@ function renderEntries(info) {
   return h(
     'div',
     {},
-    h('label', { class: 'toggle' }, all, 'Select all'),
+    h('label', { class: 'toggle' }, all, t('Select all')),
     h(
       'ul',
       { class: 'entries' },
@@ -439,7 +448,7 @@ function renderEntries(info) {
             },
           }),
           h('span', { class: 'title', title: entry.title }, entry.title),
-          findInLibrary({ ...jobOptions(info), key: entry.key, url: entry.url }) ? h('span', { class: 'in-library' }, 'In library') : null,
+          findInLibrary({ ...jobOptions(info), key: entry.key, url: entry.url }) ? h('span', { class: 'in-library' }, t('In library')) : null,
           h('span', { class: 'muted' }, formatDuration(entry.duration)),
         ),
       ),
@@ -451,7 +460,7 @@ function renderSearch(info) {
   return h(
     'div',
     { class: 'card' },
-    h('div', { class: 'muted' }, `YouTube results for “${state.probedInput}”`),
+    h('div', { class: 'muted' }, t('YouTube results for “{query}”', { query: state.probedInput })),
     h(
       'ul',
       { class: 'entries clickable' },
@@ -496,12 +505,15 @@ async function enqueue({ library = false } = {}) {
   $('#url-input').value = '';
   renderPreview();
   if (playlist) {
-    const parts = [result.added && `${result.added} downloading`, result.existing && `${result.existing} already in your library, not downloaded again`];
-    notice(`Playlist “${playlist.title}” saved to your library: ${parts.filter(Boolean).join(', ')}.`);
+    const parts = [
+      result.added && t('{n} downloading', { n: result.added }),
+      result.existing && t('{n} already in your library, not downloaded again', { n: result.existing }),
+    ];
+    notice(t('Playlist “{title}” saved to your library: {details}.', { title: playlist.title, details: parts.filter(Boolean).join(', ') }));
   } else if (library) {
-    notice(specs.length > 1 ? `${specs.length} items will show up in your library once downloaded.` : 'It will show up in your library once downloaded.');
+    notice(t('{n} items will show up in your library once downloaded.', { n: specs.length }));
   } else {
-    notice(specs.length > 1 ? `${specs.length} items added to the queue.` : '');
+    notice(specs.length > 1 ? t('{n} items added to the queue.', { n: specs.length }) : '');
   }
   $('#url-input').focus();
 }
@@ -511,21 +523,21 @@ async function enqueue({ library = false } = {}) {
 function jobStatus(job) {
   switch (job.status) {
     case 'queued':
-      return 'Waiting';
+      return t('Waiting');
     case 'downloading': {
       const parts = [`${Math.floor(job.percent || 0)}%`];
       if (job.speed) parts.push(`${formatBytes(job.speed)}/s`);
-      if (job.eta != null) parts.push(`${formatDuration(job.eta)} left`);
+      if (job.eta != null) parts.push(t('{time} left', { time: formatDuration(job.eta) }));
       return parts.join(' · ');
     }
     case 'processing':
-      return job.kind === 'audio' ? 'Converting…' : 'Finishing…';
+      return job.kind === 'audio' ? t('Converting…') : t('Finishing…');
     case 'done':
-      return 'Done';
+      return t('Done');
     case 'canceled':
-      return 'Canceled';
+      return t('Canceled');
     case 'error':
-      return job.error || 'Error';
+      return job.error || t('Error');
     default:
       return '';
   }
@@ -535,16 +547,16 @@ function renderJob(job) {
   const active = ['queued', 'downloading', 'processing'].includes(job.status);
   const actions = [];
   if (job.status === 'done' && job.library) {
-    actions.push(iconButton('play', 'Play', () => playById(job.libraryId)));
+    actions.push(iconButton('play', t('Play'), () => playById(job.libraryId)));
   } else if (job.status === 'done') {
-    actions.push(iconButton('play', 'Open', () => api.file.open(job.filePath)));
-    actions.push(iconButton('folder', 'Show in folder', () => api.file.reveal(job.filePath)));
+    actions.push(iconButton('play', t('Open'), () => api.file.open(job.filePath)));
+    actions.push(iconButton('folder', t('Show in folder'), () => api.file.reveal(job.filePath)));
   }
-  if (['error', 'canceled'].includes(job.status)) actions.push(iconButton('retry', 'Retry', () => api.queue.retry(job.id)));
+  if (['error', 'canceled'].includes(job.status)) actions.push(iconButton('retry', t('Retry'), () => api.queue.retry(job.id)));
   actions.push(
     active
-      ? iconButton('close', 'Cancel', () => api.queue.cancel(job.id))
-      : iconButton('close', 'Remove from list', () => api.queue.remove(job.id)),
+      ? iconButton('close', t('Cancel'), () => api.queue.cancel(job.id))
+      : iconButton('close', t('Remove from list'), () => api.queue.remove(job.id)),
   );
 
   return h(
@@ -559,8 +571,8 @@ function renderJob(job) {
         'div',
         { class: 'row-sub' },
         h('span', { class: 'tag' }, formatLabel(job)),
-        job.library ? h('span', { class: 'tag accent' }, 'Library') : null,
-        job.trim ? h('span', {}, `${formatDuration(Number(job.trim.start))} → ${job.trim.end ? formatDuration(Number(job.trim.end)) : 'end'}`) : null,
+        job.library ? h('span', { class: 'tag accent' }, t('Library')) : null,
+        job.trim ? h('span', {}, `${formatDuration(Number(job.trim.start))} → ${job.trim.end ? formatDuration(Number(job.trim.end)) : t('end')}`) : null,
         h('span', { class: 'status' }, jobStatus(job)),
       ),
       active ? h('div', { class: 'progress' }, h('div', { style: `width: ${job.percent || 0}%` })) : null,
@@ -631,17 +643,17 @@ function renderTile(item) {
         'div',
         { class: 'tile-text' },
         h('div', { class: 'tile-title' }, item.title),
-        h('div', { class: 'row-sub' }, h('span', { class: 'tag' }, item.kind === 'audio' ? 'Audio' : 'Video'), item.uploader ? h('span', {}, item.uploader) : null),
+        h('div', { class: 'row-sub' }, h('span', { class: 'tag' }, item.kind === 'audio' ? t('Audio') : t('Video')), item.uploader ? h('span', {}, item.uploader) : null),
       ),
       h(
         'div',
         { class: 'tile-actions' },
-        iconButton('export', 'Save a copy…', stop(() => withDialog(() => api.library.export(item.id)))),
+        iconButton('export', t('Save a copy…'), stop(() => withDialog(() => api.library.export(item.id)))),
         iconButton(
           'trash',
-          'Remove from library',
+          t('Remove from library'),
           stop(async () => {
-            if (!(await withDialog(() => confirm(`Remove “${item.title}” from your library? The file will be deleted.`)))) return;
+            if (!(await withDialog(() => confirm(t('Remove “{title}” from your library? The file will be deleted.', { title: item.title }))))) return;
             if (player?.item.id === item.id) stopPlayer();
             applyLibrary(await api.library.remove(item.id));
           }),
@@ -657,10 +669,10 @@ function renderLibrary() {
   $('#library-filter').replaceChildren(
     segmented(
       [
-        ['all', 'All'],
-        ['video', 'Videos'],
-        ['audio', 'Audio'],
-        ['playlists', state.playlists.length ? `Playlists ${state.playlists.length}` : 'Playlists'],
+        ['all', t('All')],
+        ['video', t('Videos')],
+        ['audio', t('Audio')],
+        ['playlists', state.playlists.length ? `${t('Playlists')} ${state.playlists.length}` : t('Playlists')],
       ],
       state.libraryFilter,
       (filter) => {
@@ -686,16 +698,16 @@ function renderLibrary() {
     const lists = state.playlists.filter((p) => !query || `${p.title} ${p.uploader || ''}`.toLowerCase().includes(query));
     grid.replaceChildren(...lists.map(renderPlaylistTile));
     empty.hidden = lists.length > 0;
-    empty.textContent = state.playlists.length ? 'Nothing matches.' : 'No playlists yet. Open a playlist link and choose “Save to library”.';
+    empty.textContent = state.playlists.length ? t('Nothing matches.') : t('No playlists yet. Open a playlist link and choose “Save to library”.');
   } else {
     const items = libraryItems();
     grid.replaceChildren(...items.map(renderTile));
     empty.hidden = items.length > 0;
-    if (all.length && !items.length) empty.textContent = 'Nothing matches.';
-    else empty.textContent = 'Your library is empty. Choose “Save to library” on a video to watch it here, even offline.';
+    if (all.length && !items.length) empty.textContent = t('Nothing matches.');
+    else empty.textContent = t('Your library is empty. Choose “Save to library” on a video to watch it here, even offline.');
   }
   const size = all.reduce((total, i) => total + (i.size || 0), 0);
-  $('#library-usage').textContent = all.length ? `${all.length} item${all.length === 1 ? '' : 's'} · ${formatBytes(size)} on this computer` : '';
+  $('#library-usage').textContent = all.length ? t('{items} · {size} on this computer', { items: t('{n} items', { n: all.length }), size: formatBytes(size) }) : '';
 }
 
 function applyLibrary({ items, playlists }) {
@@ -742,7 +754,7 @@ function renderPlaylistTile(playlist) {
       { class: 'tile-art' },
       thumb(playlistCover(playlist)),
       h('span', { class: 'tile-play' }, icon('playlist')),
-      h('span', { class: 'playlist-count' }, icon('playlist'), `${count} item${count === 1 ? '' : 's'}`),
+      h('span', { class: 'playlist-count' }, icon('playlist'), t('{n} items', { n: count })),
     ),
     h(
       'div',
@@ -751,7 +763,7 @@ function renderPlaylistTile(playlist) {
         'div',
         { class: 'tile-text' },
         h('div', { class: 'tile-title' }, playlist.title),
-        h('div', { class: 'row-sub' }, h('span', { class: 'tag' }, 'Playlist'), playlist.uploader ? h('span', {}, playlist.uploader) : null),
+        h('div', { class: 'row-sub' }, h('span', { class: 'tag' }, t('Playlist')), playlist.uploader ? h('span', {}, playlist.uploader) : null),
       ),
     ),
   );
@@ -761,12 +773,12 @@ function renderPlaylistView(playlist) {
   const query = state.librarySearch.trim().toLowerCase();
   const items = playlistItems(playlist);
   const pending = playlist.entries.length - items.length;
-  const total = items.reduce((t, i) => t + (i.duration || 0), 0);
+  const total = items.reduce((sum, i) => sum + (i.duration || 0), 0);
   const meta = [
     playlist.uploader,
-    `${items.length} item${items.length === 1 ? '' : 's'}`,
+    t('{n} items', { n: items.length }),
     total ? formatTotal(total) : null,
-    pending ? `${pending} still downloading` : null,
+    pending ? t('{n} still downloading', { n: pending }) : null,
   ].filter(Boolean);
 
   const head = h(
@@ -781,11 +793,11 @@ function renderPlaylistView(playlist) {
       h(
         'div',
         { class: 'playlist-actions' },
-        h('button', { class: 'btn primary', disabled: !items.length, onclick: () => playPlaylist(playlist, 0) }, icon('play'), 'Play all'),
-        h('button', { class: 'btn', disabled: items.length < 2, onclick: () => playPlaylist(playlist, 0, { shuffle: true }) }, icon('shuffle'), 'Shuffle'),
-        playlist.url ? h('button', { class: 'btn', onclick: () => api.openLink(playlist.url) }, 'Open original') : null,
-        iconButton('trash', 'Delete playlist', async () => {
-          if (!(await withDialog(() => confirm(`Delete the playlist “${playlist.title}”? Its videos stay in your library.`)))) return;
+        h('button', { class: 'btn primary', disabled: !items.length, onclick: () => playPlaylist(playlist, 0) }, icon('play'), t('Play all')),
+        h('button', { class: 'btn', disabled: items.length < 2, onclick: () => playPlaylist(playlist, 0, { shuffle: true }) }, icon('shuffle'), t('Shuffle')),
+        playlist.url ? h('button', { class: 'btn', onclick: () => api.openLink(playlist.url) }, t('Open original')) : null,
+        iconButton('trash', t('Delete playlist'), async () => {
+          if (!(await withDialog(() => confirm(t('Delete the playlist “{title}”? Its videos stay in your library.', { title: playlist.title }))))) return;
           state.openPlaylist = null;
           applyLibrary(await api.library.removePlaylist(playlist.id));
         }),
@@ -813,7 +825,7 @@ function renderPlaylistView(playlist) {
         h(
           'div',
           { class: 'row-actions' },
-          iconButton('close', 'Remove from this playlist', async (e) => {
+          iconButton('close', t('Remove from this playlist'), async (e) => {
             e.stopPropagation();
             applyLibrary(await api.library.removeFromPlaylist(playlist.id, item.id));
           }),
@@ -832,7 +844,7 @@ function renderPlaylistView(playlist) {
         },
       },
       icon('back'),
-      'Playlists',
+      t('Playlists'),
     ),
     head,
     h('ol', { class: 'rows playlist-rows' }, rows),
@@ -915,14 +927,14 @@ const SHORTCUTS = [
 
 function languageName(lang) {
   try {
-    // In English, like the rest of the interface.
-    return new Intl.DisplayNames(['en'], { type: 'language' }).of(lang) || lang;
+    // In the language of the interface.
+    return new Intl.DisplayNames([currentLanguage()], { type: 'language' }).of(lang) || lang;
   } catch {
     return lang;
   }
 }
 
-const speedLabel = (rate) => (rate === 1 ? 'Normal' : `${Number(rate.toFixed(2))}×`);
+const speedLabel = (rate) => (rate === 1 ? t('Normal') : `${Number(rate.toFixed(2))}×`);
 
 function playById(id) {
   const item = state.library.find((i) => i.id === id);
@@ -1037,13 +1049,13 @@ function openPlayer(item, { queue = null, mini = false } = {}) {
     api.settings.set({ playerVolume: media.volume, playerMuted: media.muted });
   });
   on(media, 'error', () => {
-    const text = 'This file can’t be played. It may have been deleted or use a format the player doesn’t support.';
+    const text = t('This file can’t be played. It may have been deleted or use a format the player doesn’t support.');
     if (player.mini) player.miniSub.textContent = text;
     else player.stage.replaceChildren(h('div', { class: 'player-error' }, text));
   });
   // Keeps Chromium from drawing subtitles on top of ours.
   on(media.textTracks, 'change', () => {
-    for (const t of media.textTracks) if (t.mode === 'showing') t.mode = t === player.track ? 'hidden' : 'disabled';
+    for (const track of media.textTracks) if (track.mode === 'showing') track.mode = track === player.track ? 'hidden' : 'disabled';
   });
 
   if ('mediaSession' in navigator) {
@@ -1122,10 +1134,10 @@ function renderDescription(item) {
         class: 'link',
         onclick: () => {
           const collapsed = box.classList.toggle('collapsed');
-          toggle.textContent = collapsed ? 'Show more' : 'Show less';
+          toggle.textContent = collapsed ? t('Show more') : t('Show less');
         },
       },
-      'Show more',
+      t('Show more'),
     );
     box.append(toggle);
   }
@@ -1172,22 +1184,22 @@ function expandPlayer() {
   setupSeek(player.seek);
 
   const c = (player.ctl = {});
-  c.play = ctl('play', 'Play (k)', togglePlay, 'filled');
+  c.play = ctl('play', t('Play (k)'), togglePlay, 'filled');
   // In a playlist the skip buttons move between videos, otherwise between chapters.
   if (player.queue) {
-    c.prev = ctl('prevChapter', 'Previous (Shift P)', previousInQueue, 'filled');
-    c.next = ctl('nextChapter', 'Next (Shift N)', () => playAdjacent(1), 'filled');
+    c.prev = ctl('prevChapter', t('Previous (Shift P)'), previousInQueue, 'filled');
+    c.next = ctl('nextChapter', t('Next (Shift N)'), () => playAdjacent(1), 'filled');
   } else if (chapters.length) {
-    c.prev = ctl('prevChapter', `Previous chapter (${CHAPTER_KEY} ←)`, () => seekChapter(-1), 'filled');
-    c.next = ctl('nextChapter', `Next chapter (${CHAPTER_KEY} →)`, () => seekChapter(1), 'filled');
+    c.prev = ctl('prevChapter', t('Previous chapter ({key} ←)', { key: CHAPTER_KEY }), () => seekChapter(-1), 'filled');
+    c.next = ctl('nextChapter', t('Next chapter ({key} →)', { key: CHAPTER_KEY }), () => seekChapter(1), 'filled');
   }
-  c.mute = ctl('volume', 'Mute (m)', toggleMute);
+  c.mute = ctl('volume', t('Mute (m)'), toggleMute);
   c.volume = h('input', {
     type: 'range',
     min: 0,
     max: 1,
     step: 0.01,
-    'aria-label': 'Volume',
+    'aria-label': t('Volume'),
     oninput: (e) => setVolume(Number(e.target.value)),
     onchange: (e) => e.target.blur(),
   });
@@ -1197,14 +1209,14 @@ function expandPlayer() {
   } }, c.mute, c.volume);
   c.time = h('span', { class: 'ctl-time' });
   c.chapter = chapters.length
-    ? h('button', { class: 'ctl-chapter', title: 'Chapters', onmousedown: (e) => e.preventDefault(), onclick: () => player.chapterBox?.scrollIntoView({ behavior: 'smooth', block: 'center' }) })
+    ? h('button', { class: 'ctl-chapter', title: t('Chapters'), onmousedown: (e) => e.preventDefault(), onclick: () => player.chapterBox?.scrollIntoView({ behavior: 'smooth', block: 'center' }) })
     : null;
-  c.captions = item.subtitles?.length ? ctl('captions', 'Subtitles (c)', toggleSubtitles) : null;
-  c.settings = ctl('settings', 'Settings', () => (player.menuOpen ? closeMenu() : openMenu('main')));
-  c.mini = ctl('mini', 'Mini player (i)', toMini);
-  c.theater = audio ? null : ctl('theater', 'Theater mode (t)', toggleTheater);
-  c.pip = audio ? null : ctl('pip', 'Picture in picture', () => (pip ? leavePip() : enterPip({ manual: true })));
-  c.fullscreen = audio ? null : ctl('fullscreen', 'Full screen (f)', toggleFullscreen);
+  c.captions = item.subtitles?.length ? ctl('captions', t('Subtitles (c)'), toggleSubtitles) : null;
+  c.settings = ctl('settings', t('Settings'), () => (player.menuOpen ? closeMenu() : openMenu('main')));
+  c.mini = ctl('mini', t('Mini player (i)'), toMini);
+  c.theater = audio ? null : ctl('theater', t('Theater mode (t)'), toggleTheater);
+  c.pip = audio ? null : ctl('pip', t('Picture in picture'), () => (pip ? leavePip() : enterPip({ manual: true })));
+  c.fullscreen = audio ? null : ctl('fullscreen', t('Full screen (f)'), toggleFullscreen);
 
   player.controls = h(
     'div',
@@ -1245,9 +1257,9 @@ function expandPlayer() {
     h(
       'div',
       { class: 'help-box' },
-      h('div', { class: 'help-title' }, 'Keyboard and mouse'),
-      h('div', { class: 'help-grid' }, SHORTCUTS.map(([keys, action]) => [h('kbd', {}, keys), h('span', {}, action)])),
-      h('div', { class: 'help-foot' }, 'Click the video to pause, scroll over the volume to change it.'),
+      h('div', { class: 'help-title' }, t('Keyboard and mouse')),
+      h('div', { class: 'help-grid' }, SHORTCUTS.map(([keys, action]) => [h('kbd', {}, t(keys)), h('span', {}, t(action))])),
+      h('div', { class: 'help-foot' }, t('Click the video to pause, scroll over the volume to change it.')),
     ),
   );
 
@@ -1294,13 +1306,13 @@ function expandPlayer() {
       ),
     ),
   );
-  player.chapterBox = chapters.length ? h('section', { class: 'chapters-box' }, h('h2', {}, 'Chapters'), player.chapterList) : null;
+  player.chapterBox = chapters.length ? h('section', { class: 'chapters-box' }, h('h2', {}, t('Chapters')), player.chapterList) : null;
 
   $('#player').classList.toggle('theater', Boolean(state.settings.theater) && !audio);
   player.descriptionBox = renderDescription(item);
   player.queueBox = renderQueueBox();
   $('#player').replaceChildren(...[
-    h('button', { class: 'link player-back', onclick: () => selectTab('library') }, icon('back'), 'Library'),
+    h('button', { class: 'link player-back', onclick: () => selectTab('library') }, icon('back'), t('Library')),
     player.stage,
     h(
       'div',
@@ -1314,8 +1326,8 @@ function expandPlayer() {
       h(
         'div',
         { class: 'row-actions' },
-        iconButton('export', 'Save a copy…', () => withDialog(() => api.library.export(item.id))),
-        item.url ? h('button', { class: 'btn small', onclick: () => api.openLink(item.url) }, 'Open original') : null,
+        iconButton('export', t('Save a copy…'), () => withDialog(() => api.library.export(item.id))),
+        item.url ? h('button', { class: 'btn small', onclick: () => api.openLink(item.url) }, t('Open original')) : null,
       ),
     ),
     player.queueBox,
@@ -1391,7 +1403,7 @@ function renderQueueBox() {
     h(
       'div',
       { class: 'queue-head' },
-      h('span', { class: 'queue-title' }, queue.shuffle ? `${queue.title} · shuffled` : queue.title),
+      h('span', { class: 'queue-title' }, queue.shuffle ? t('{title} · shuffled', { title: queue.title }) : queue.title),
       h('span', { class: 'muted' }, `${queue.index + 1} / ${queue.order.length}`),
     ),
     h('ol', { class: 'queue-list' }, rows.filter(Boolean)),
@@ -1536,16 +1548,16 @@ function updateControls() {
   }
   const { media } = player;
   const c = player.ctl;
-  setCtl(c.play, media.paused ? 'play' : 'pause', media.paused ? 'Play (k)' : 'Pause (k)');
+  setCtl(c.play, media.paused ? 'play' : 'pause', media.paused ? t('Play (k)') : t('Pause (k)'));
   const level = media.muted || media.volume === 0 ? 'muted' : media.volume < 0.5 ? 'volumeLow' : 'volume';
-  setCtl(c.mute, level, media.muted ? 'Unmute (m)' : 'Mute (m)');
+  setCtl(c.mute, level, media.muted ? t('Unmute (m)') : t('Mute (m)'));
   c.volume.value = media.muted ? 0 : media.volume;
   c.volume.style.setProperty('--level', `${(media.muted ? 0 : media.volume) * 100}%`);
   c.captions?.classList.toggle('on', Boolean(player.track));
   c.theater?.classList.toggle('on', $('#player').classList.contains('theater'));
   if (c.fullscreen) {
     const full = document.fullscreenElement === player.stage;
-    setCtl(c.fullscreen, full ? 'exitFullscreen' : 'fullscreen', full ? 'Exit full screen (f)' : 'Full screen (f)');
+    setCtl(c.fullscreen, full ? 'exitFullscreen' : 'fullscreen', full ? t('Exit full screen (f)') : t('Full screen (f)'));
   }
 }
 
@@ -1696,8 +1708,8 @@ function pipPlaceholder() {
     'div',
     { class: 'pip-placeholder' },
     icon('pip'),
-    h('div', {}, 'Playing in picture-in-picture'),
-    h('button', { class: 'btn small', onclick: () => leavePip() }, 'Bring it back'),
+    h('div', {}, t('Playing in picture-in-picture')),
+    h('button', { class: 'btn small', onclick: () => leavePip() }, t('Bring it back')),
   );
 }
 
@@ -1711,7 +1723,7 @@ function renderPip() {
   const doc = pip.win.document;
   doc.title = item.title;
   const c = (pip.ctl = {});
-  c.play = pipButton('play', 'Play', () => (togglePlay(), pokePip()), 'big filled');
+  c.play = pipButton('play', t('Play'), () => (togglePlay(), pokePip()), 'big filled');
   pip.bar = h('div', { class: 'pip-fill' });
   pip.time = h('span', { class: 'pip-time' });
   pip.captions = h('div', { class: 'captions' });
@@ -1737,15 +1749,15 @@ function renderPip() {
         'div',
         { class: 'pip-top' },
         h('span', { class: 'pip-title' }, item.title),
-        pipButton('expand', 'Back to Decant', () => leavePip({ focus: true })),
-        pipButton('close', 'Close', () => leavePip({ pause: true })),
+        pipButton('expand', t('Back to Decant'), () => leavePip({ focus: true })),
+        pipButton('close', t('Close'), () => leavePip({ pause: true })),
       ),
       h(
         'div',
         { class: 'pip-center' },
-        player.queue ? pipButton('prevChapter', 'Previous', previousInQueue, 'filled') : pipButton('back10', 'Back 10 s', () => skip(-10)),
+        player.queue ? pipButton('prevChapter', t('Previous'), previousInQueue, 'filled') : pipButton('back10', t('Back 10 s'), () => skip(-10)),
         c.play,
-        player.queue ? pipButton('nextChapter', 'Next', () => playAdjacent(1), 'filled') : pipButton('forward10', 'Forward 10 s', () => skip(10)),
+        player.queue ? pipButton('nextChapter', t('Next'), () => playAdjacent(1), 'filled') : pipButton('forward10', t('Forward 10 s'), () => skip(10)),
       ),
       h('div', { class: 'pip-bottom' }, pip.time, seek),
     ),
@@ -1822,7 +1834,7 @@ function updatePip() {
   const duration = Number.isFinite(media.duration) ? media.duration : 0;
   pip.bar.style.transform = `scaleX(${duration ? media.currentTime / duration : 0})`;
   pip.time.textContent = `${formatDuration(media.currentTime)} / ${formatDuration(duration)}`;
-  setCtl(pip.ctl.play, media.paused ? 'play' : 'pause', media.paused ? 'Play' : 'Pause');
+  setCtl(pip.ctl.play, media.paused ? 'play' : 'pause', media.paused ? t('Play') : t('Pause'));
   pip.root.classList.toggle('paused', media.paused);
 }
 
@@ -1868,10 +1880,10 @@ function setSubtitles(lang, { remember = true } = {}) {
   const { media } = player;
   player.track?.removeEventListener('cuechange', renderCaptions);
   player.track = null;
-  for (const t of media.textTracks) {
-    const pick = Boolean(lang) && t.language === lang;
-    t.mode = pick ? 'hidden' : 'disabled';
-    if (pick) player.track = t;
+  for (const track of media.textTracks) {
+    const pick = Boolean(lang) && track.language === lang;
+    track.mode = pick ? 'hidden' : 'disabled';
+    if (pick) player.track = track;
   }
   player.track?.addEventListener('cuechange', renderCaptions);
   renderCaptions();
@@ -1887,11 +1899,11 @@ function toggleSubtitles() {
   if (!tracks.length) return;
   if (player.track) {
     setSubtitles('');
-    flash('captions', 'Subtitles off');
+    flash('captions', t('Subtitles off'));
     return;
   }
   const own = navigator.language.split('-')[0];
-  const track = tracks.find((t) => t.language === own) || tracks[0];
+  const track = tracks.find((tr) => tr.language === own) || tracks[0];
   setSubtitles(track.language);
   flash('captions', track.label);
 }
@@ -1929,14 +1941,14 @@ function changeCaptionSize(step) {
   const sizes = CAPTION_SIZES;
   const i = clamp(sizes.indexOf(captionStyle().size) + step, 0, sizes.length - 1);
   setCaptionStyle({ size: sizes[i] });
-  flash(null, `Subtitle size ${sizes[i] * 100}%`);
+  flash(null, t('Subtitle size {size}', { size: `${sizes[i] * 100}%` }));
 }
 
 function cycleCaptionBackground() {
   const list = CAPTION_OPACITIES;
   const next = list[(list.indexOf(captionStyle().opacity) + 1) % list.length];
   setCaptionStyle({ opacity: next });
-  flash(null, `Subtitle background ${next * 100}%`);
+  flash(null, t('Subtitle background {opacity}', { opacity: `${next * 100}%` }));
 }
 
 // --- Player: settings menu ---
@@ -1960,13 +1972,13 @@ function renderMenu(name) {
   const { media } = player;
   const tracks = [...media.textTracks];
   const style = captionStyle();
-  const labelOf = (list, value) => list.find(([v]) => v === value)?.[1] || '';
+  const labelOf = (list, value) => t(list.find(([v]) => v === value)?.[1] || '');
   const swatch = (color) => h('span', { class: 'swatch', style: `background: ${color}` });
   const choices = (title, list, current, key, extra) => ({
-    title,
+    title: t(title),
     back: 'style',
     rows: list.map(([value, label]) => ({
-      label,
+      label: t(label),
       lead: extra?.(value),
       checked: value === current,
       pick: () => setCaptionStyle({ [key]: value }),
@@ -1975,13 +1987,13 @@ function renderMenu(name) {
   const panels = {
     main: {
       rows: [
-        { label: 'Speed', value: speedLabel(media.playbackRate), go: 'speed' },
-        tracks.length ? { label: 'Subtitles', value: player.track ? player.track.label : 'Off', go: 'subtitles' } : null,
-        tracks.length ? { label: 'Subtitle style', go: 'style' } : null,
+        { label: t('Speed'), value: speedLabel(media.playbackRate), go: 'speed' },
+        tracks.length ? { label: t('Subtitles'), value: player.track ? player.track.label : t('Off'), go: 'subtitles' } : null,
+        tracks.length ? { label: t('Subtitle style'), go: 'style' } : null,
         player.item.kind !== 'audio'
           ? {
-              label: 'Auto picture-in-picture',
-              value: state.settings.autoPip === false ? 'Off' : 'On',
+              label: t('Auto picture-in-picture'),
+              value: state.settings.autoPip === false ? t('Off') : t('On'),
               stay: true,
               pick: () => {
                 state.settings.autoPip = state.settings.autoPip === false;
@@ -1989,33 +2001,33 @@ function renderMenu(name) {
               },
             }
           : null,
-        { label: 'Keyboard shortcuts', value: '?', pick: () => toggleHelp(true) },
+        { label: t('Keyboard shortcuts'), value: '?', pick: () => toggleHelp(true) },
       ].filter(Boolean),
     },
     speed: {
-      title: 'Speed',
+      title: t('Speed'),
       back: 'main',
       custom: true,
       rows: SPEEDS.map((s) => ({ label: speedLabel(s), checked: Math.abs(media.playbackRate - s) < 0.001, pick: () => setSpeed(s) })),
     },
     subtitles: {
-      title: 'Subtitles',
+      title: t('Subtitles'),
       back: 'main',
       rows: [
-        { label: 'Off', checked: !player.track, pick: () => setSubtitles('') },
-        ...tracks.map((t) => ({ label: t.label, checked: player.track === t, pick: () => setSubtitles(t.language) })),
+        { label: t('Off'), checked: !player.track, pick: () => setSubtitles('') },
+        ...tracks.map((track) => ({ label: track.label, checked: player.track === track, pick: () => setSubtitles(track.language) })),
       ],
     },
     style: {
-      title: 'Subtitle style',
+      title: t('Subtitle style'),
       back: 'main',
       rows: [
-        { label: 'Size', value: `${style.size * 100}%`, go: 'size' },
-        { label: 'Font', value: labelOf(CAPTION_FONTS, style.font), go: 'font' },
-        { label: 'Text color', value: labelOf(CAPTION_COLORS, style.color), go: 'color' },
-        { label: 'Background', value: labelOf(CAPTION_COLORS, style.background), go: 'background' },
-        { label: 'Background opacity', value: `${style.opacity * 100}%`, go: 'opacity' },
-        { label: 'Reset', pick: () => setCaptionStyle(CAPTION_DEFAULTS), stay: true },
+        { label: t('Size'), value: `${style.size * 100}%`, go: 'size' },
+        { label: t('Font'), value: labelOf(CAPTION_FONTS, style.font), go: 'font' },
+        { label: t('Text color'), value: labelOf(CAPTION_COLORS, style.color), go: 'color' },
+        { label: t('Background'), value: labelOf(CAPTION_COLORS, style.background), go: 'background' },
+        { label: t('Background opacity'), value: `${style.opacity * 100}%`, go: 'opacity' },
+        { label: t('Reset'), pick: () => setCaptionStyle(CAPTION_DEFAULTS), stay: true },
       ],
     },
     size: choices('Size', CAPTION_SIZES.map((s) => [s, `${s * 100}%`]), style.size, 'size'),
@@ -2050,7 +2062,7 @@ function renderMenu(name) {
     custom = h(
       'label',
       { class: 'menu-custom' },
-      h('span', {}, 'Custom'),
+      h('span', {}, t('Custom')),
       h('input', {
         type: 'range',
         min: 0.25,
@@ -2087,7 +2099,7 @@ function minimizePlayer() {
   player.menuOpen = false;
   media.controls = false;
   media.onclick = media.ondblclick = null;
-  player.toggle = iconButton('play', 'Play', () => (media.paused ? media.play() : media.pause()));
+  player.toggle = iconButton('play', t('Play'), () => (media.paused ? media.play() : media.pause()));
   player.miniBar = h('div');
   player.miniSub = h('div', { class: 'mini-sub' });
   // An <audio> stays in the page (hidden) or it would stop.
@@ -2105,7 +2117,7 @@ function minimizePlayer() {
     ),
     h('div', { class: 'mini-art', onclick: expand }, item.kind === 'audio' ? thumb(coverUrl(item)) : null, pip ? h('div', { class: 'mini-pip' }, icon('pip')) : media),
     h('div', { class: 'mini-text', onclick: expand }, h('div', { class: 'mini-title' }, item.title), player.miniSub),
-    h('div', { class: 'row-actions' }, player.toggle, iconButton('expand', 'Open player', expand), iconButton('close', 'Stop', stopPlayer)),
+    h('div', { class: 'row-actions' }, player.toggle, iconButton('expand', t('Open player'), expand), iconButton('close', t('Stop'), stopPlayer)),
   );
   $('#mini-player').hidden = false;
   $('#player').replaceChildren();
@@ -2146,7 +2158,7 @@ function updatePlayState() {
   if (!player?.mini) return;
   const paused = player.media.paused;
   player.toggle.replaceChildren(icon(paused ? 'play' : 'pause'));
-  player.toggle.title = paused ? 'Play' : 'Pause';
+  player.toggle.title = paused ? t('Play') : t('Pause');
   player.toggle.setAttribute('aria-label', player.toggle.title);
 }
 
@@ -2214,7 +2226,7 @@ async function renderHistory() {
   $('#history-count').textContent = items.length ? items.length : '';
   $('#history-empty').hidden = items.length > 0;
   const exists = await Promise.all(items.map((i) => api.file.exists(i.filePath)));
-  const dateFmt = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  const dateFmt = new Intl.DateTimeFormat(currentLanguage(), { dateStyle: 'medium', timeStyle: 'short' });
   $('#history-list').replaceChildren(
     ...items.map((item, i) =>
       h(
@@ -2230,20 +2242,20 @@ async function renderHistory() {
             { class: 'row-sub' },
             h('span', { class: 'tag' }, formatLabel(item)),
             h('span', {}, dateFmt.format(item.date)),
-            exists[i] ? null : h('span', {}, 'File moved or deleted'),
+            exists[i] ? null : h('span', {}, t('File moved or deleted')),
           ),
         ),
         h(
           'div',
           { class: 'row-actions' },
-          exists[i] ? iconButton('play', 'Open', () => api.file.open(item.filePath)) : null,
-          exists[i] ? iconButton('folder', 'Show in folder', () => api.file.reveal(item.filePath)) : null,
-          iconButton('retry', 'Download again', () => {
+          exists[i] ? iconButton('play', t('Open'), () => api.file.open(item.filePath)) : null,
+          exists[i] ? iconButton('folder', t('Show in folder'), () => api.file.reveal(item.filePath)) : null,
+          iconButton('retry', t('Download again'), () => {
             selectTab('download');
             $('#url-input').value = item.url;
             analyze(item.url);
           }),
-          iconButton('trash', 'Remove from history', async () => {
+          iconButton('trash', t('Remove from history'), async () => {
             state.history = await api.history.remove(item.id);
             renderHistory();
           }),
@@ -2251,6 +2263,78 @@ async function renderHistory() {
       ),
     ),
   );
+}
+
+// --- Settings ---------------------------------------------------------------
+
+function renderSettings() {
+  const s = state.settings;
+  const set = (patch) => {
+    Object.assign(s, patch);
+    api.settings.set(patch);
+    // New defaults also apply to the link being previewed.
+    state.choice = defaultChoice();
+    renderPreview();
+    renderSettings();
+  };
+  const row = (label, control, hint) => [h('span', { class: 'label' }, label), h('div', {}, control, hint ? h('div', { class: 'hint' }, hint) : null)];
+  const group = (title, hint, rows) =>
+    h('section', { class: 'settings-group' }, h('h2', {}, title), hint ? h('p', { class: 'hint' }, hint) : null, h('div', { class: 'card' }, h('div', { class: 'options settings-options' }, [rows].flat(3))));
+  const language = h(
+    'select',
+    { class: 'select', onchange: (e) => changeLanguage(e.target.value) },
+    h('option', { value: '' }, t('Automatic')),
+    LANGUAGES.map(([code, name]) => h('option', { value: code }, name)),
+  );
+  language.value = s.language || '';
+  $('#tab-settings').replaceChildren(
+    group(t('General'), null, row(t('Language'), language)),
+    group(t('Downloads'), t('Used for every new link. You can still change them for a single download.'), [
+      row(t('Type'), segmented([['video', t('Video')], ['audio', t('Audio')]], s.defaultKind, (defaultKind) => set({ defaultKind }))),
+      row(
+        t('Video quality'),
+        segmented([['best', t('Best')], ...ALL_HEIGHTS.map((x) => [String(x), heightLabel(x)])], s.defaultVideoQuality, (defaultVideoQuality) => set({ defaultVideoQuality })),
+      ),
+      row(t('Audio format'), segmented(AUDIO_FORMATS.map((f) => [f, f.toUpperCase()]), s.defaultAudioFormat, (defaultAudioFormat) => set({ defaultAudioFormat }))),
+      s.defaultAudioFormat === 'mp3'
+        ? row(t('MP3 quality'), segmented(MP3_BITRATES.map((b) => [b, `${b} kbps`]), s.defaultAudioQuality, (defaultAudioQuality) => set({ defaultAudioQuality })))
+        : null,
+    ]),
+    group(
+      t('Player'),
+      null,
+      row(
+        t('Picture-in-picture'),
+        segmented([[true, t('On')], [false, t('Off')]], s.autoPip !== false, (autoPip) => set({ autoPip })),
+        t('Opens by itself when you switch to another app while a video plays.'),
+      ),
+    ),
+  );
+}
+
+function changeLanguage(lang) {
+  state.settings.language = lang;
+  api.settings.set({ language: lang });
+  applyLanguage();
+  renderDestination();
+  renderPreview();
+  renderQueue();
+  renderLibrary();
+  renderHistory();
+  renderSettings();
+  showVersion(state.engineVersion);
+  if (player) player.mini ? minimizePlayer() : expandPlayer();
+  if (pip) renderPip();
+}
+
+// The texts written in index.html.
+function applyLanguage() {
+  setLanguage(state.settings.language, navigator.language);
+  document.documentElement.lang = currentLanguage();
+  for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
+  for (const el of document.querySelectorAll('[data-i18n-placeholder]')) el.placeholder = t(el.dataset.i18nPlaceholder);
+  for (const el of document.querySelectorAll('[data-i18n-aria-label]')) el.setAttribute('aria-label', t(el.dataset.i18nAriaLabel));
+  for (const el of document.querySelectorAll('[data-i18n-title]')) el.title = t(el.dataset.i18nTitle);
 }
 
 // --- Tabs, destination, footer ----------------------------------------------
@@ -2261,8 +2345,15 @@ function selectTab(name) {
   $('#tab-download').hidden = name !== 'download';
   $('#tab-library').hidden = name !== 'library';
   $('#tab-history').hidden = name !== 'history';
+  $('#tab-settings').hidden = name !== 'settings';
   if (name === 'history') renderHistory();
   if (name === 'library') renderLibrary();
+  if (name === 'settings') renderSettings();
+}
+
+function showVersion(version) {
+  state.engineVersion = version;
+  $('#engine-version').textContent = version ? `yt-dlp ${version}` : t('yt-dlp not found');
 }
 
 function renderDestination() {
@@ -2271,7 +2362,7 @@ function renderDestination() {
   // The button is right-to-left so long paths cut on the left; the LRM marks
   // keep the slashes where they belong.
   btn.textContent = `‎${dir}‎`;
-  btn.title = `${dir}\nClick to open the folder`;
+  btn.title = `${dir}\n${t('Click to open the folder')}`;
 }
 
 async function pasteFromClipboard() {
@@ -2292,6 +2383,8 @@ async function init() {
   else for (const opt of document.querySelectorAll('[data-platform="darwin"]')) opt.remove();
 
   state.settings = await api.settings.get();
+  applyLanguage();
+  state.choice = defaultChoice();
   state.trim = { enabled: false, start: '', end: '' };
   state.speed = 1;
   renderDestination();
@@ -2356,7 +2449,7 @@ async function init() {
 
   $('#queue-clear').addEventListener('click', () => api.queue.clear());
   $('#history-clear').addEventListener('click', async () => {
-    if (!confirm('Clear the whole history? Your files will not be deleted.')) return;
+    if (!confirm(t('Clear the whole history? Your files will not be deleted.'))) return;
     state.history = await api.history.clear();
     renderHistory();
   });
@@ -2365,18 +2458,17 @@ async function init() {
   cookies.value = state.settings.cookiesBrowser || '';
   cookies.addEventListener('change', () => api.settings.set({ cookiesBrowser: cookies.value }));
 
-  const showVersion = (v) => ($('#engine-version').textContent = v ? `yt-dlp ${v}` : 'yt-dlp not found');
   api.engine.version().then(showVersion);
   api.engine.onVersion(showVersion);
   $('#engine-update').addEventListener('click', async (e) => {
     const btn = e.currentTarget;
     btn.disabled = true;
-    btn.textContent = 'Updating…';
+    btn.textContent = t('Updating…');
     try {
       showVersion(await api.engine.update());
-      btn.textContent = 'Up to date';
+      btn.textContent = t('Up to date');
     } catch (err) {
-      btn.textContent = 'Update failed';
+      btn.textContent = t('Update failed');
       btn.title = cleanError(err);
     } finally {
       btn.disabled = false;

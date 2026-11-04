@@ -137,10 +137,10 @@
     settings: {
       get: async () => ({
         outputDir: '/Users/you/Downloads',
-        kind: scene === 'video' ? 'video' : 'audio',
-        audioFormat: 'mp3',
-        audioQuality: '320',
-        videoQuality: '1080',
+        defaultKind: scene === 'video' ? 'video' : 'audio',
+        defaultAudioFormat: 'mp3',
+        defaultAudioQuality: '320',
+        defaultVideoQuality: '1080',
         cookiesBrowser: '',
       }),
       set: async () => {},

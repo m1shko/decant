@@ -18,6 +18,7 @@ const html = fs
   .readFileSync(path.join(root, 'src', 'renderer', 'index.html'), 'utf8')
   .replace(/\s*<meta\s+http-equiv="Content-Security-Policy"[\s\S]*?\/>/, '')
   .replace('href="styles.css"', 'href="../../src/renderer/styles.css"')
+  .replace('<script src="i18n.js"></script>', '<script src="../../src/renderer/i18n.js"></script>')
   .replace('<script src="app.js"></script>', '<script src="mock.js"></script>\n    <script src="../../src/renderer/app.js"></script>');
 fs.writeFileSync(path.join(demoDir, 'index.html'), html);
 fs.mkdirSync(outDir, { recursive: true });
