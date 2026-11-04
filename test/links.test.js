@@ -6,7 +6,7 @@ const video = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
 const link = (action, params) => `decant://${action}?${new URLSearchParams(params)}`;
 
 test('reads an open link', () => {
-  assert.deepEqual(parseDecantUrl(link('open', { url: video })), { action: 'open', url: video, only: null });
+  assert.deepEqual(parseDecantUrl(link('open', { url: video })), { action: 'open', url: video, playlist: false, only: null });
 });
 
 test('reads a save link with picked videos', () => {
@@ -14,8 +14,15 @@ test('reads a save link with picked videos', () => {
   assert.deepEqual(parseDecantUrl(link('save', { url: playlist, only: 'aaa,bbb,aaa' })), {
     action: 'save',
     url: playlist,
+    playlist: true,
     only: ['aaa', 'bbb'],
   });
+});
+
+test('reads a mix as a playlist when asked to', () => {
+  const mix = `${video}&list=RDdQw4w9WgXcQ`;
+  assert.equal(parseDecantUrl(link('open', { url: mix, playlist: '1' })).playlist, true);
+  assert.equal(parseDecantUrl(link('open', { url: mix })).playlist, false);
 });
 
 test('accepts the forms some systems rewrite the link to', () => {

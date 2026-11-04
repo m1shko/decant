@@ -3,6 +3,8 @@
 //
 //   decant://open?url=<link>             show the link, ready to download
 //   decant://save?url=<link>             save it straight to the library
+//   ...&playlist=1                       read the link as a playlist (a YouTube
+//                                        mix is a video link with a list in it)
 //   ...&only=<id>,<id>                   for a playlist: just these videos
 //
 // What such a link may carry is kept narrow: it comes from outside the app.
@@ -36,7 +38,7 @@ function parseDecantUrl(raw) {
     .map((id) => id.trim())
     .filter((id) => /^[\w-]{1,64}$/.test(id))
     .slice(0, MAX_ONLY);
-  return { action, url, only: only.length ? [...new Set(only)] : null };
+  return { action, url, playlist: link.searchParams.get('playlist') === '1' || only.length > 0, only: only.length ? [...new Set(only)] : null };
 }
 
 // The decant:// URL among command-line arguments (Windows and Linux pass it there).

@@ -542,18 +542,18 @@ async function enqueue({ library = false } = {}) {
 
 // "Send to Decant": show the link, ready to download, with the videos the
 // browser picked already ticked.
-async function openLink({ url, only }) {
+async function openLink({ url, playlist, only }) {
   selectTab('download');
   $('#url-input').value = url;
   state.lastClipboard = url;
-  await analyze(url, { playlist: Boolean(only), only });
+  await analyze(url, { playlist, only });
 }
 
 // "Save to Decant": straight to the library with the default choices, without
 // taking the user away from what they are watching here.
-async function saveLink({ url, only }) {
+async function saveLink({ url, playlist, only }) {
   try {
-    const info = await api.probe(url, { playlist: Boolean(only) });
+    const info = await api.probe(url, { playlist });
     const { specs, playlist } = specsFor(info, { library: true, choice: defaultChoice(), selected: pickedEntries(info, only), input: url });
     if (!specs.length) throw new Error(t('None of the picked videos are in this playlist.'));
     const result = await api.queue.add(specs, { playlist });

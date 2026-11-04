@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --accent: #6d4aff;
+      }
+      body {
+        margin: 0;
+        padding: 16px 20px 20px;
+        min-width: 360px;
+        font: 14px/1.45 system-ui, sans-serif;
+      }
+      h2 {
+        margin: 0 0 8px;
+        font-size: 14px;
+      }
+      label {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        margin: 6px 0;
+        cursor: pointer;
+      }
+      input {
+        accent-color: var(--accent);
+        margin-top: 3px;
+      }
+      fieldset {
+        border: 0;
+        margin: 0 0 16px;
+        padding: 0;
+      }
+      .hint {
+        color: GrayText;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <fieldset>
+      <h2 data-i18n="optionsAction"></h2>
+      <label><input type="radio" name="action" value="open" /><span data-i18n="optionOpen"></span></label>
+      <label><input type="radio" name="action" value="save" /><span data-i18n="optionSave"></span></label>
+      <p class="hint" data-i18n="optionsAlt"></p>
+    </fieldset>
+    <fieldset>
+      <h2>YouTube</h2>
+      <label><input type="checkbox" name="thumbnails" /><span data-i18n="optionThumbnails"></span></label>
+    </fieldset>
+    <script src="options.js"></script>
+  </body>
+</html>

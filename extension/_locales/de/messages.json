@@ -1,0 +1,119 @@
+{
+  "extName": {
+    "message": "An Decant senden"
+  },
+  "extDescription": {
+    "message": "Schicke ein Video, eine Playlist oder jede Seite mit einem Klick an die Decant-App."
+  },
+  "actionTitle": {
+    "message": "Diese Seite an Decant senden"
+  },
+  "sentTitle": {
+    "message": "An Decant gesendet"
+  },
+  "savedTitle": {
+    "message": "Wird in deiner Decant-Mediathek gespeichert"
+  },
+  "nothingToSend": {
+    "message": "Nichts auf dieser Seite, das Decant öffnen kann"
+  },
+  "menuOpenLink": {
+    "message": "Link an Decant senden"
+  },
+  "menuSaveLink": {
+    "message": "Link in der Decant-Mediathek speichern"
+  },
+  "menuOpenPage": {
+    "message": "Diese Seite an Decant senden"
+  },
+  "menuSavePage": {
+    "message": "Diese Seite in der Decant-Mediathek speichern"
+  },
+  "sendVideo": {
+    "message": "An Decant senden"
+  },
+  "sendPlaylist": {
+    "message": "Playlist senden"
+  },
+  "sendPlaylistLong": {
+    "message": "Die ganze Playlist an Decant senden"
+  },
+  "playlist": {
+    "message": "Playlist"
+  },
+  "pickVideos": {
+    "message": "Videos auswählen"
+  },
+  "pickHint": {
+    "message": "Klicke Videos an, um sie auszuwählen, Umschalt-Klick für einen Bereich"
+  },
+  "pickedCount": {
+    "message": "Ausgewählt: $COUNT$",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "selectAll": {
+    "message": "Alle"
+  },
+  "selectNone": {
+    "message": "Keine"
+  },
+  "sendPicked": {
+    "message": "Senden ($COUNT$)",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "cancel": {
+    "message": "Abbrechen"
+  },
+  "altSave": {
+    "message": "Alt-Klick: direkt in der Mediathek speichern"
+  },
+  "altOpen": {
+    "message": "Alt-Klick: in Decant öffnen, um das Format zu wählen"
+  },
+  "toastSent": {
+    "message": "An Decant gesendet"
+  },
+  "toastSaved": {
+    "message": "Wird in deiner Decant-Mediathek gespeichert"
+  },
+  "toastSentMany": {
+    "message": "An Decant gesendete Videos: $COUNT$",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "toastHint": {
+    "message": "Nichts passiert? Decant muss installiert sein und einmal geöffnet worden sein."
+  },
+  "getDecant": {
+    "message": "Decant herunterladen"
+  },
+  "optionsAction": {
+    "message": "Was der Knopf tut"
+  },
+  "optionOpen": {
+    "message": "In Decant öffnen, um Video oder Audio und die Qualität zu wählen"
+  },
+  "optionSave": {
+    "message": "Direkt in der Decant-Mediathek speichern, mit den Standardwerten aus den Decant-Einstellungen"
+  },
+  "optionsAlt": {
+    "message": "Alt-Klick (Wahl-Klick auf dem Mac) auf einen Knopf bei YouTube macht das andere."
+  },
+  "optionThumbnails": {
+    "message": "Den Knopf auf Vorschaubildern zeigen"
+  }
+}

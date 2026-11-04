@@ -1,0 +1,31 @@
+/* Picking videos on a playlist page (see youtube.js): a tick box on each
+   thumbnail, and an outline around the picked ones. */
+.decant-row {
+  cursor: pointer;
+}
+.decant-thumb {
+  position: relative !important;
+}
+decant-check {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 10;
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  border: 2px solid #fff;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.55);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+.decant-picked decant-check {
+  border-color: #6d4aff;
+  background: #6d4aff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 16px no-repeat;
+}
+.decant-picked {
+  outline: 2px solid #6d4aff;
+  outline-offset: 2px;
+  border-radius: 12px;
+}
