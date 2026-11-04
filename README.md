@@ -28,7 +28,7 @@ Download from YouTube, Instagram, TikTok and 1,000+ other sites, or save videos 
 | 🎬 **Video**             | MP4 from 360p to 4K, using H.264 whenever possible so it plays everywhere (QuickTime, Windows, phones) |
 | ✂️ **Clips**             | Grab just a part: "from 12:30 to 16:05"                                                                |
 | 📃 **Playlists**         | Tick the items you want, they go straight to the queue                                                 |
-| 📚 **Library**           | Save videos and music inside Decant instead of your Downloads folder, and watch them offline. Playlists stay together, and a video you already have is never downloaded twice |
+| 📚 **Library**           | Save videos and music inside Decant instead of your Downloads folder, and watch them offline. Playlists stay together, a video you already have is never downloaded twice, and you can pick several at once to copy or remove them |
 | ▶️ **Player**            | Chapters on the seek bar, subtitles you can restyle, speed, theater and mini player, and the keyboard shortcuts you'd expect (press `?` to see them). Picks up where you left off |
 | 🪟 **Picture-in-picture** | Switch to another app while a video plays and it keeps going in a small floating window                |
 | ⏬ **Queue**             | Line up as many downloads as you like, two run at once, with speed and time left                       |
@@ -38,6 +38,7 @@ Download from YouTube, Instagram, TikTok and 1,000+ other sites, or save videos 
 | 🕘 **History**           | Find, open or re-download anything you got before                                                      |
 | 🍪 **Browser cookies**   | Uses your browser session for Instagram, private or age-restricted videos                              |
 | 🔄 **Always up to date** | The download engine updates itself daily, because sites change all the time                           |
+| 🌍 **Your language**     | English, French, Spanish, German, Italian or Portuguese, following your system or picked in Settings    |
 
 <div align="center">
 <img src="docs/screenshots/video-dark.png" width="400" alt="Choosing video quality and a clip" />
@@ -70,7 +71,7 @@ Nothing else to install: everything Decant needs is bundled.
 ## 🚀 How to use it
 
 1. **Copy a link** (YouTube video, Instagram Reel, TikTok, playlist…) and paste it into Decant. If Decant is already open, the link shows up by itself.
-2. **Choose** *Audio* or *Video*, then the format and quality. Tick *Only part of it* to keep just a clip.
+2. **Choose** *Video* or *Audio*, then the format and quality. Tick *Only part of it* to keep just a clip. New links start as video at the best quality: change that default in **Settings** (the gear, top right).
 3. **Click Download.** The file lands in your *Downloads* folder (switch it with the **Change** button right under the preview).
    Or click **Save to library** to keep it inside Decant and watch it from the **Library** tab.
 
