@@ -137,6 +137,7 @@
     settings: {
       get: async () => ({
         outputDir: '/Users/you/Downloads',
+        language: 'en',
         defaultKind: scene === 'video' ? 'video' : 'audio',
         defaultAudioFormat: 'mp3',
         defaultAudioQuality: '320',
