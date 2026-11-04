@@ -38,10 +38,13 @@
   // --- Sending ------------------------------------------------------------------
 
   // target: { kind: 'video' | 'playlist', url }. Opening the decant:// link
-  // hands it to the app; the page stays where it is.
+  // hands it to the app; the page stays where it is. A cancelable
+  // "decant:send" event goes out first, so the tests can catch the link
+  // without launching anything (scripts/test-extension.mjs).
   function send(target, { alt = false, only = null } = {}) {
     const action = alt ? otherAction() : prefs.action;
-    location.href = D.decantUrl(action, target.url, { playlist: target.kind === 'playlist', only });
+    const link = D.decantUrl(action, target.url, { playlist: target.kind === 'playlist', only });
+    if (window.dispatchEvent(new CustomEvent('decant:send', { detail: link, cancelable: true }))) location.href = link;
     toast(only ? t('toastSentMany', only.length) : action === 'save' ? t('toastSaved') : t('toastSent'));
   }
 
@@ -228,15 +231,18 @@
     return list && /^[\w-]{2,64}$/.test(list) ? list : null;
   }
 
-  // The playlist's videos on the page: Map videoId -> { row, thumb }.
+  // The playlist's videos on the page: Map videoId -> { row, thumb }. Only
+  // links inside a row count: the playlist's big cover also links to its
+  // first video, and would take that video's place.
   function playlistRows(list) {
     const page = document.querySelector('ytd-browse[page-subtype="playlist"]:not([hidden])') || document;
     const rows = new Map();
     for (const a of page.querySelectorAll('a[href*="/watch?"]')) {
-      if (!a.querySelector(THUMB) || a.closest(HEADER)) continue;
+      const row = a.closest(ROW);
+      if (!row || !a.querySelector(THUMB) || a.closest(HEADER)) continue;
       const yt = D.parseYoutube(a.getAttribute('href'));
       if (!yt?.video || yt.list !== list || rows.has(yt.video)) continue;
-      rows.set(yt.video, { row: a.closest(ROW) || a.parentElement, thumb: a });
+      rows.set(yt.video, { row, thumb: a });
     }
     return rows;
   }

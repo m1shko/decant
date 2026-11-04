@@ -188,6 +188,10 @@ function friendlyError(stderr, url = '') {
   if (/sign in to confirm|not a bot/.test(lower)) {
     return t('YouTube wants to check you are not a bot. Pick your browser under “Cookies” (bottom left) and try again.');
   }
+  // Watch later, Liked videos and private playlists only exist for their owner.
+  if (/playlist does not exist|playlist type is unviewable|private/.test(lower) && /[?&]list=(WL|LL|LM)\b/.test(url)) {
+    return t('This playlist belongs to your account (Watch later, Liked videos…). Pick the browser you are logged in with under “Cookies” (bottom left) and try again.');
+  }
   if (/private/.test(lower)) return t('This video is private.');
   if (/unsupported url/.test(lower)) return t('This link is not supported.');
   if (/video unavailable|not available|removed|404/.test(lower)) return t('This video is not available (or no longer).');
