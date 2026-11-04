@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld('decant', {
     remove: invoke('library:remove'),
     progress: invoke('library:progress'),
     export: invoke('library:export'),
+    exportMany: invoke('library:exportMany'),
     refresh: invoke('library:refresh'),
     removeFromPlaylist: invoke('library:removeFromPlaylist'),
     removePlaylist: invoke('library:removePlaylist'),

@@ -18,6 +18,8 @@ const state = {
   openPlaylist: null,
   libraryFilter: 'all',
   librarySearch: '',
+  // Picking several library items at once (null when not picking).
+  selection: null,
   lastClipboard: null,
 };
 
@@ -625,13 +627,20 @@ function renderTile(item) {
     e.stopPropagation();
     fn();
   };
+  const selected = state.selection?.has(item.id);
+  // While picking, a click selects; ⌘/Ctrl-click starts picking.
+  const onclick = (e) => {
+    if (state.selection || e.metaKey || e.ctrlKey) toggleSelected(item.id);
+    else openPlayer(item);
+  };
   return h(
     'li',
-    { class: 'tile', title: item.title, onclick: () => openPlayer(item) },
+    { class: `tile${selected ? ' selected' : ''}`, title: item.title, onclick },
     h(
       'div',
       { class: 'tile-art' },
       thumb(coverUrl(item)),
+      state.selection ? h('span', { class: 'tile-check' }, selected ? icon('check') : null) : null,
       h('span', { class: 'tile-play' }, icon('play')),
       item.duration ? h('span', { class: 'badge' }, formatDuration(item.duration)) : null,
       progress ? h('div', { class: 'tile-progress' }, h('div', { style: `width: ${progress}%` })) : null,
@@ -663,8 +672,69 @@ function renderTile(item) {
   );
 }
 
+// --- Library: picking several items ---
+
+function toggleSelected(id) {
+  state.selection ??= new Set();
+  if (state.selection.has(id)) state.selection.delete(id);
+  else state.selection.add(id);
+  renderLibrary();
+}
+
+function stopSelecting() {
+  state.selection = null;
+  renderLibrary();
+}
+
+function renderSelectionBar() {
+  const bar = $('#library-selection');
+  const ids = [...(state.selection || [])];
+  bar.hidden = !state.selection;
+  if (!state.selection) return bar.replaceChildren();
+  const visible = libraryItems().map((i) => i.id);
+  const allPicked = visible.length > 0 && visible.every((id) => state.selection.has(id));
+  bar.replaceChildren(
+    h('span', { class: 'selection-count' }, t('{n} selected', { n: ids.length })),
+    h(
+      'button',
+      {
+        class: 'link',
+        onclick: () => {
+          state.selection = new Set(allPicked ? [] : visible);
+          renderLibrary();
+        },
+      },
+      allPicked ? t('Deselect all') : t('Select all'),
+    ),
+    h('span', { class: 'spacer' }),
+    h('button', { class: 'btn small', disabled: !ids.length, onclick: () => withDialog(() => api.library.exportMany(ids)) }, icon('export'), t('Save copies…')),
+    h(
+      'button',
+      {
+        class: 'btn small danger',
+        disabled: !ids.length,
+        onclick: async () => {
+          if (!(await withDialog(() => confirm(t('Remove {n} items from your library? Their files will be deleted.', { n: ids.length }))))) return;
+          if (player && ids.includes(player.item.id)) stopPlayer();
+          state.selection = null;
+          applyLibrary(await api.library.remove(ids));
+        },
+      },
+      icon('trash'),
+      t('Remove'),
+    ),
+    h('button', { class: 'btn small', onclick: stopSelecting }, t('Done')),
+  );
+}
+
 function renderLibrary() {
   const all = state.library;
+  // Picking works on the videos and songs, not on playlists.
+  if (state.selection && state.libraryFilter === 'playlists') state.selection = null;
+  if (state.selection) for (const id of state.selection) if (!all.some((i) => i.id === id)) state.selection.delete(id);
+  $('#tab-library').classList.toggle('selecting', Boolean(state.selection));
+  $('#library-select').hidden = Boolean(state.selection) || state.libraryFilter === 'playlists' || !all.length;
+  renderSelectionBar();
   $('#library-count').textContent = all.length ? all.length : '';
   $('#library-filter').replaceChildren(
     segmented(
@@ -2346,6 +2416,7 @@ function selectTab(name) {
   $('#tab-library').hidden = name !== 'library';
   $('#tab-history').hidden = name !== 'history';
   $('#tab-settings').hidden = name !== 'settings';
+  if (name !== 'library') state.selection = null;
   if (name === 'history') renderHistory();
   if (name === 'library') renderLibrary();
   if (name === 'settings') renderSettings();
@@ -2402,6 +2473,13 @@ async function init() {
   $('#library-search').addEventListener('input', (e) => {
     state.librarySearch = e.target.value;
     renderLibrary();
+  });
+  $('#library-select').addEventListener('click', () => {
+    state.selection = new Set();
+    renderLibrary();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && state.selection && !$('#tab-library').hidden) stopSelecting();
   });
   document.addEventListener('keydown', onPlayerKey);
   setupMediaKeys();

@@ -166,18 +166,46 @@ function serveLibrary(request) {
   });
 }
 
+// The name a library item gets once copied out of the library.
+function exportName(item) {
+  const base = item.title.replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').slice(0, 150).trim() || 'video';
+  return `${base}${path.extname(item.file)}`;
+}
+
 async function exportLibraryItem(id) {
   const item = library.get(id);
   if (!item) return null;
-  const ext = path.extname(item.file);
-  const base = item.title.replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').slice(0, 150).trim() || 'video';
   const result = await dialog.showSaveDialog(win, {
     title: t('Save a copy'),
-    defaultPath: path.join(outputDir(), `${base}${ext}`),
+    defaultPath: path.join(outputDir(), exportName(item)),
   });
   if (result.canceled || !result.filePath) return null;
   await fs.promises.copyFile(path.join(library.dir(id), item.file), result.filePath);
   return result.filePath;
+}
+
+// Copies several items into a folder, without replacing files already there,
+// then shows the folder.
+async function exportLibraryItems(ids) {
+  const result = await dialog.showOpenDialog(win, {
+    title: t('Save copies to…'),
+    defaultPath: outputDir(),
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  const dir = result.filePaths?.[0];
+  if (result.canceled || !dir) return 0;
+  let count = 0;
+  for (const id of ids) {
+    const item = library.get(id);
+    if (!item) continue;
+    const { name, ext } = path.parse(exportName(item));
+    let target = path.join(dir, `${name}${ext}`);
+    for (let n = 2; fs.existsSync(target); n++) target = path.join(dir, `${name} (${n})${ext}`);
+    await fs.promises.copyFile(path.join(library.dir(id), item.file), target);
+    count++;
+  }
+  shell.openPath(dir);
+  return count;
 }
 
 async function probe(_event, input, { playlist = false, search = false } = {}) {
@@ -265,8 +293,8 @@ function registerIpc() {
   });
 
   ipcMain.handle('library:list', () => library.snapshot());
-  ipcMain.handle('library:remove', (_e, id) => {
-    library.remove(id);
+  ipcMain.handle('library:remove', (_e, ids) => {
+    for (const id of [ids].flat()) library.remove(id);
     return library.snapshot();
   });
   ipcMain.handle('library:removeFromPlaylist', (_e, playlistId, id) => {
@@ -286,6 +314,7 @@ function registerIpc() {
     });
   });
   ipcMain.handle('library:export', (_e, id) => exportLibraryItem(id));
+  ipcMain.handle('library:exportMany', (_e, ids) => exportLibraryItems(ids));
   // Fills in what items saved by older versions lack (needs the internet).
   ipcMain.handle('library:refresh', async (_e, id) => {
     const item = library.get(id);
