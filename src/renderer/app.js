@@ -554,11 +554,11 @@ async function openLink({ url, playlist, only }) {
 async function saveLink({ url, playlist, only }) {
   try {
     const info = await api.probe(url, { playlist });
-    const { specs, playlist } = specsFor(info, { library: true, choice: defaultChoice(), selected: pickedEntries(info, only), input: url });
-    if (!specs.length) throw new Error(t('None of the picked videos are in this playlist.'));
-    const result = await api.queue.add(specs, { playlist });
+    const jobs = specsFor(info, { library: true, choice: defaultChoice(), selected: pickedEntries(info, only), input: url });
+    if (!jobs.specs.length) throw new Error(t('None of the picked videos are in this playlist.'));
+    const result = await api.queue.add(jobs.specs, { playlist: jobs.playlist });
     const message =
-      info.type === 'video' && !result.added ? t('“{title}” is already in your library.', { title: info.title }) : queuedMessage(result, { specs, playlist, library: true });
+      info.type === 'video' && !result.added ? t('“{title}” is already in your library.', { title: info.title }) : queuedMessage(result, { ...jobs, library: true });
     notice(message);
     notify(info.title, message);
   } catch (err) {
