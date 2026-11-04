@@ -4,6 +4,7 @@
 // the buttons stop showing up. Needs Google Chrome and the internet.
 //   npm run test:extension            (CHROME=/path/to/chrome to pick another)
 //   npm run test:extension -- --shots  also saves screenshots to dist/extension-shots/
+//   EXTENSION=path/to/Decant-Extension npm run test:extension  tries an unzipped release instead
 import puppeteer from 'puppeteer-core';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -27,7 +28,7 @@ const browser = await puppeteer.launch({
   executablePath: chrome,
   headless: true,
   pipe: true,
-  enableExtensions: [path.join(root, 'extension')],
+  enableExtensions: [path.resolve(process.env.EXTENSION || path.join(root, 'extension'))],
   userDataDir: profile,
   defaultViewport: { width: 1400, height: 1000 },
 });
