@@ -6,6 +6,8 @@ const { Readable } = require('node:stream');
 const ytdlp = require('./ytdlp');
 const binaries = require('./binaries');
 const { settings, history, library, sameMedia } = require('./store');
+const i18n = require('../renderer/i18n.js');
+const { t } = i18n;
 const { Queue } = require('./queue');
 
 // The player reads library files through decant-media://<id>/media (and
@@ -170,7 +172,7 @@ async function exportLibraryItem(id) {
   const ext = path.extname(item.file);
   const base = item.title.replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').slice(0, 150).trim() || 'video';
   const result = await dialog.showSaveDialog(win, {
-    title: 'Save a copy',
+    title: t('Save a copy'),
     defaultPath: path.join(outputDir(), `${base}${ext}`),
   });
   if (result.canceled || !result.filePath) return null;
@@ -184,7 +186,7 @@ async function probe(_event, input, { playlist = false, search = false } = {}) {
   const { code, stdout, stderr } = await ytdlp.run(env.bin, args, { env: env.extraEnv }).done;
   if (code !== 0) throw new Error(ytdlp.friendlyError(stderr, input));
   const info = ytdlp.summarizeInfo(JSON.parse(stdout));
-  if (info.type === 'playlist' && !info.entries.length) throw new Error('No videos found.');
+  if (info.type === 'playlist' && !info.entries.length) throw new Error(t('No videos found.'));
   return info;
 }
 
@@ -204,11 +206,14 @@ function registerIpc() {
   ipcMain.handle('probe', probe);
 
   ipcMain.handle('settings:get', () => ({ ...settings.get(), outputDir: outputDir() }));
-  ipcMain.handle('settings:set', (_e, patch) => settings.set(patch));
+  ipcMain.handle('settings:set', (_e, patch) => {
+    if ('language' in patch) i18n.setLanguage(patch.language, app.getLocale());
+    return settings.set(patch);
+  });
 
   ipcMain.handle('folder:choose', async () => {
     const result = await dialog.showOpenDialog(win, {
-      title: 'Where should downloads go?',
+      title: t('Where should downloads go?'),
       defaultPath: outputDir(),
       properties: ['openDirectory', 'createDirectory'],
     });
@@ -440,6 +445,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  i18n.setLanguage(settings.get().language, app.getLocale());
   library.prune();
   protocol.handle('decant-media', serveLibrary);
   registerIpc();

@@ -1,6 +1,7 @@
 // Everything that knows how to talk to yt-dlp: building command lines,
 // reading its output, and turning its JSON into what the interface shows.
 const { spawn } = require('node:child_process');
+const { t } = require('../renderer/i18n.js');
 
 const AUDIO_FORMATS = ['mp3', 'm4a', 'wav', 'flac'];
 const VIDEO_FORMATS = ['mp4'];
@@ -179,24 +180,24 @@ function isPostprocessLine(line) {
 
 function friendlyError(stderr, url = '') {
   const lines = String(stderr).split(/\r?\n/).filter((l) => l.startsWith('ERROR:'));
-  const raw = (lines.at(-1) || String(stderr).trim().split(/\r?\n/).at(-1) || 'Unknown error').replace(/^ERROR:\s*/, '');
+  const raw = (lines.at(-1) || String(stderr).trim().split(/\r?\n/).at(-1) || t('Unknown error')).replace(/^ERROR:\s*/, '');
   const lower = raw.toLowerCase();
   if (/login required|log in|logged-in|rate-limit reached|requested content is not available/.test(lower) && /instagram/.test(url + lower)) {
-    return 'Instagram wants you to be logged in. Pick your browser under “Cookies” (bottom left) and try again.';
+    return t('Instagram wants you to be logged in. Pick your browser under “Cookies” (bottom left) and try again.');
   }
   if (/sign in to confirm|not a bot/.test(lower)) {
-    return 'YouTube wants to check you are not a bot. Pick your browser under “Cookies” (bottom left) and try again.';
+    return t('YouTube wants to check you are not a bot. Pick your browser under “Cookies” (bottom left) and try again.');
   }
-  if (/private/.test(lower)) return 'This video is private.';
-  if (/unsupported url/.test(lower)) return 'This link is not supported.';
-  if (/video unavailable|not available|removed|404/.test(lower)) return 'This video is not available (or no longer).';
+  if (/private/.test(lower)) return t('This video is private.');
+  if (/unsupported url/.test(lower)) return t('This link is not supported.');
+  if (/video unavailable|not available|removed|404/.test(lower)) return t('This video is not available (or no longer).');
   if (/age/.test(lower) && /restrict|confirm your age/.test(lower)) {
-    return 'This video is age-restricted: pick your browser under “Cookies” (bottom left).';
+    return t('This video is age-restricted: pick your browser under “Cookies” (bottom left).');
   }
   if (/could not copy .* cookie|cookies? database|keychain|operation not permitted/.test(lower)) {
-    return `Could not read the browser cookies: ${raw}`;
+    return t('Could not read the browser cookies: {error}', { error: raw });
   }
-  if (/getaddrinfo|network|timed out|connection/.test(lower)) return 'Network problem: check your internet connection.';
+  if (/getaddrinfo|network|timed out|connection/.test(lower)) return t('Network problem: check your internet connection.');
   return raw;
 }
 

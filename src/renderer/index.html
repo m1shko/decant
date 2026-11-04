@@ -18,9 +18,10 @@
         <span>Decant</span>
       </div>
       <nav class="tabs" role="tablist">
-        <button role="tab" data-tab="download" aria-selected="true">Download</button>
-        <button role="tab" data-tab="library" aria-selected="false">Library <span id="library-count" class="count"></span></button>
-        <button role="tab" data-tab="history" aria-selected="false">History <span id="history-count" class="count"></span></button>
+        <button role="tab" data-tab="download" aria-selected="true"><span data-i18n="Download">Download</span></button>
+        <button role="tab" data-tab="library" aria-selected="false"><span data-i18n="Library">Library</span> <span id="library-count" class="count"></span></button>
+        <button role="tab" data-tab="history" aria-selected="false"><span data-i18n="History">History</span> <span id="history-count" class="count"></span></button>
+        <button role="tab" data-tab="settings" aria-selected="false"><span data-i18n="Settings">Settings</span></button>
       </nav>
     </header>
 
@@ -35,9 +36,11 @@
             type="text"
             spellcheck="false"
             placeholder="Paste a YouTube, Instagram, TikTok… link, or type to search"
+            data-i18n-placeholder="Paste a YouTube, Instagram, TikTok… link, or type to search"
             aria-label="Link or search"
+            data-i18n-aria-label="Link or search"
           />
-          <button type="submit" class="btn primary" id="analyze-btn">Go</button>
+          <button type="submit" class="btn primary" id="analyze-btn" data-i18n="Go">Go</button>
         </form>
 
         <div id="notice" class="notice" hidden></div>
@@ -45,25 +48,33 @@
 
         <div class="destination">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
-          <span>Saving to</span>
-          <button id="dest-path" class="path" title="Open the folder"></button>
-          <button id="dest-change" class="btn small">Change</button>
+          <span data-i18n="Saving to">Saving to</span>
+          <button id="dest-path" class="path"></button>
+          <button id="dest-change" class="btn small" data-i18n="Change">Change</button>
         </div>
 
         <section class="queue">
           <div class="section-head">
-            <h2>Queue</h2>
-            <button id="queue-clear" class="link" hidden>Clear finished</button>
+            <h2 data-i18n="Queue">Queue</h2>
+            <button id="queue-clear" class="link" data-i18n="Clear finished" hidden>Clear finished</button>
           </div>
           <ul id="queue-list" class="rows"></ul>
-          <p id="queue-empty" class="empty">Nothing here yet. Paste a link to get started.</p>
+          <p id="queue-empty" class="empty" data-i18n="Nothing here yet. Paste a link to get started.">Nothing here yet. Paste a link to get started.</p>
         </section>
       </section>
 
       <section id="tab-library" class="tab wide" hidden>
         <div class="library-head">
           <div id="library-filter" class="segmented"></div>
-          <input id="library-search" type="search" spellcheck="false" placeholder="Search your library" aria-label="Search your library" />
+          <input
+            id="library-search"
+            type="search"
+            spellcheck="false"
+            placeholder="Search your library"
+            data-i18n-placeholder="Search your library"
+            aria-label="Search your library"
+            data-i18n-aria-label="Search your library"
+          />
         </div>
         <ul id="library-grid" class="grid"></ul>
         <div id="library-playlist" class="playlist-view" hidden></div>
@@ -75,21 +86,27 @@
 
       <section id="tab-history" class="tab" hidden>
         <div class="section-head">
-          <h2>History</h2>
-          <button id="history-clear" class="link">Clear all</button>
+          <h2 data-i18n="History">History</h2>
+          <button id="history-clear" class="link" data-i18n="Clear all">Clear all</button>
         </div>
         <ul id="history-list" class="rows"></ul>
-        <p id="history-empty" class="empty">No downloads yet.</p>
+        <p id="history-empty" class="empty" data-i18n="No downloads yet.">No downloads yet.</p>
       </section>
+
+      <section id="tab-settings" class="tab" hidden></section>
     </main>
 
     <div id="mini-player" class="mini" hidden></div>
 
     <footer class="statusbar">
-      <label class="cookies" title="For Instagram, private or age-restricted videos: Decant uses your session from this browser.">
-        Cookies
+      <label
+        class="cookies"
+        title="For Instagram, private or age-restricted videos: Decant uses your session from this browser."
+        data-i18n-title="For Instagram, private or age-restricted videos: Decant uses your session from this browser."
+      >
+        <span data-i18n="Cookies">Cookies</span>
         <select id="cookies-select">
-          <option value="">None</option>
+          <option value="" data-i18n="None">None</option>
           <option value="chrome">Chrome</option>
           <option value="firefox">Firefox</option>
           <option value="safari" data-platform="darwin">Safari</option>
@@ -101,9 +118,10 @@
       </label>
       <span class="spacer"></span>
       <span id="engine-version" class="muted"></span>
-      <button id="engine-update" class="link">Update engine</button>
+      <button id="engine-update" class="link" data-i18n="Update engine">Update engine</button>
     </footer>
 
+    <script src="i18n.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

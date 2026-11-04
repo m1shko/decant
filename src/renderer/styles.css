@@ -2009,3 +2009,27 @@ html.pip-window body {
   width: 22px;
   height: 22px;
 }
+
+/* Settings */
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-group .hint {
+  margin: 0;
+}
+
+.settings-options {
+  grid-template-columns: 150px 1fr;
+  gap: 14px 16px;
+}
+
+.select {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 13px;
+}
