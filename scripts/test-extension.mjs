@@ -33,10 +33,17 @@ const browser = await puppeteer.launch({
   defaultViewport: { width: 1400, height: 1000 },
 });
 const page = await browser.newPage();
-const cdp = await page.createCDPSession();
-await cdp.send('Page.enable');
+// The extension announces each link with a "decant:send" event: catch it, so
+// nothing reaches an installed Decant and Chrome shows no "Open Decant?"
+// prompt (which, unanswered, would block the tab).
 let sent = null;
-cdp.on('Page.frameRequestedNavigation', (e) => e.url.startsWith('decant:') && (sent = decodeURIComponent(e.url)));
+await page.exposeFunction('decantSent', (link) => (sent = decodeURIComponent(link)));
+await page.evaluateOnNewDocument(() =>
+  window.addEventListener('decant:send', (e) => {
+    e.preventDefault();
+    window.decantSent(e.detail);
+  }),
+);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let failures = 0;
@@ -150,6 +157,11 @@ if (bar.length === 2) {
     }),
   );
   check('pick mode puts a box on each video', rows.length === 6 && (await page.evaluate(() => document.querySelectorAll('decant-check').length)) >= 6);
+  const first = await page.evaluate(() => {
+    const a = document.querySelector('a[href*="/watch?"][href*="index=1"]');
+    return a && new URL(a.href).searchParams.get('v');
+  });
+  check('the first video gets a box too', Boolean(first) && rows[0]?.id === first, `${rows[0]?.id} / ${first}`);
   const url = page.url();
   await click(rows[1].x, rows[1].y);
   await page.keyboard.down('Shift');

@@ -138,4 +138,5 @@ test('friendly errors', () => {
   assert.match(y.friendlyError('ERROR: [Instagram] x: login required', 'https://instagram.com/p/x'), /Cookies/);
   assert.match(y.friendlyError('ERROR: Private video'), /private/);
   assert.equal(y.friendlyError('ERROR: something odd'), 'something odd');
+  assert.match(y.friendlyError('ERROR: [youtube:tab] WL: YouTube said: The playlist does not exist.', 'https://www.youtube.com/playlist?list=WL'), /Cookies/);
 });

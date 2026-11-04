@@ -252,6 +252,8 @@
       'Unknown error': 'Erreur inconnue',
       'Instagram wants you to be logged in. Pick your browser under “Cookies” (bottom left) and try again.':
         'Instagram demande d’être connecté. Choisissez votre navigateur sous « Cookies » (en bas à gauche) et réessayez.',
+      'This playlist belongs to your account (Watch later, Liked videos…). Pick the browser you are logged in with under “Cookies” (bottom left) and try again.':
+        'Cette playlist est liée à votre compte (À regarder plus tard, Vidéos « J’aime »…). Choisissez sous « Cookies » (en bas à gauche) le navigateur où vous êtes connecté, puis réessayez.',
       'YouTube wants to check you are not a bot. Pick your browser under “Cookies” (bottom left) and try again.':
         'YouTube veut vérifier que vous n’êtes pas un robot. Choisissez votre navigateur sous « Cookies » (en bas à gauche) et réessayez.',
       'This video is private.': 'Cette vidéo est privée.',
@@ -490,6 +492,8 @@
       'Unknown error': 'Error desconocido',
       'Instagram wants you to be logged in. Pick your browser under “Cookies” (bottom left) and try again.':
         'Instagram pide iniciar sesión. Elige tu navegador en «Cookies» (abajo a la izquierda) y vuelve a intentarlo.',
+      'This playlist belongs to your account (Watch later, Liked videos…). Pick the browser you are logged in with under “Cookies” (bottom left) and try again.':
+        'Esta playlist pertenece a tu cuenta (Ver más tarde, Vídeos que me gustan…). Elige en «Cookies» (abajo a la izquierda) el navegador en el que tienes la sesión iniciada y vuelve a intentarlo.',
       'YouTube wants to check you are not a bot. Pick your browser under “Cookies” (bottom left) and try again.':
         'YouTube quiere comprobar que no eres un bot. Elige tu navegador en «Cookies» (abajo a la izquierda) y vuelve a intentarlo.',
       'This video is private.': 'Este vídeo es privado.',
@@ -725,6 +729,8 @@
       'Unknown error': 'Unbekannter Fehler',
       'Instagram wants you to be logged in. Pick your browser under “Cookies” (bottom left) and try again.':
         'Instagram verlangt eine Anmeldung. Wähle deinen Browser unter „Cookies“ (unten links) und versuche es erneut.',
+      'This playlist belongs to your account (Watch later, Liked videos…). Pick the browser you are logged in with under “Cookies” (bottom left) and try again.':
+        'Diese Playlist gehört zu deinem Konto (Später ansehen, Videos mit „Mag ich“…). Wähle unter „Cookies“ (unten links) den Browser, in dem du angemeldet bist, und versuche es erneut.',
       'YouTube wants to check you are not a bot. Pick your browser under “Cookies” (bottom left) and try again.':
         'YouTube will prüfen, dass du kein Bot bist. Wähle deinen Browser unter „Cookies“ (unten links) und versuche es erneut.',
       'This video is private.': 'Dieses Video ist privat.',
@@ -963,6 +969,8 @@
       'Unknown error': 'Errore sconosciuto',
       'Instagram wants you to be logged in. Pick your browser under “Cookies” (bottom left) and try again.':
         'Instagram richiede l’accesso. Scegli il tuo browser in «Cookie» (in basso a sinistra) e riprova.',
+      'This playlist belongs to your account (Watch later, Liked videos…). Pick the browser you are logged in with under “Cookies” (bottom left) and try again.':
+        'Questa playlist appartiene al tuo account (Guarda più tardi, Video piaciuti…). Scegli in «Cookies» (in basso a sinistra) il browser in cui hai effettuato l’accesso e riprova.',
       'YouTube wants to check you are not a bot. Pick your browser under “Cookies” (bottom left) and try again.':
         'YouTube vuole verificare che tu non sia un bot. Scegli il tuo browser in «Cookie» (in basso a sinistra) e riprova.',
       'This video is private.': 'Questo video è privato.',
@@ -1198,6 +1206,8 @@
       'Unknown error': 'Erro desconhecido',
       'Instagram wants you to be logged in. Pick your browser under “Cookies” (bottom left) and try again.':
         'O Instagram pede que você esteja logado. Escolha seu navegador em “Cookies” (canto inferior esquerdo) e tente de novo.',
+      'This playlist belongs to your account (Watch later, Liked videos…). Pick the browser you are logged in with under “Cookies” (bottom left) and try again.':
+        'Esta playlist pertence à sua conta (Assistir mais tarde, Vídeos marcados com “Gostei”…). Escolha em “Cookies” (embaixo à esquerda) o navegador em que você está conectado e tente de novo.',
       'YouTube wants to check you are not a bot. Pick your browser under “Cookies” (bottom left) and try again.':
         'O YouTube quer confirmar que você não é um robô. Escolha seu navegador em “Cookies” (canto inferior esquerdo) e tente de novo.',
       'This video is private.': 'Este vídeo é privado.',
