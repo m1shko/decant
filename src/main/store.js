@@ -62,6 +62,10 @@ const settings = jsonFile('settings.json', {
   playerMuted: false,
   theater: false,
   autoPip: true,
+  // Videos you finish go to "To delete", then are deleted (see cleanup.js).
+  autoCleanup: false,
+  cleanupDelayDays: 7,
+  cleanupAudio: false,
   pipBounds: null,
   lastEngineUpdate: 0,
 });
@@ -160,6 +164,11 @@ const library = {
       .playlists.map((p) => ({ ...p, entries: p.entries.filter((e) => library.get(e.id)) }))
       .filter((p) => p.entries.length);
     libraryFile.set({ playlists });
+  },
+  // Writes items and playlists at once and deletes the folders of `deleted`.
+  replace({ items, playlists }, deleted = []) {
+    libraryFile.set({ items, playlists });
+    for (const id of deleted) fs.rm(library.dir(id), { recursive: true, force: true }, () => {});
   },
   flush: () => libraryFile.flush(),
 };
