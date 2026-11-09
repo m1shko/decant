@@ -172,6 +172,7 @@
     openLink: noop,
     pip: { fit: noop, drag: noop, onPointer: listen },
     focusWindow: noop,
+    links: { ready: async () => [], onIncoming: listen },
     readClipboard: async () =>
       scene === 'history' ? '' : scene === 'playlist' ? 'https://www.youtube.com/playlist?list=demo' : 'https://www.youtube.com/watch?v=demo',
     engine: { version: async () => '2026.10.22', update: async () => '2026.10.22', onVersion: listen },
