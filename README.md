@@ -29,6 +29,7 @@ Download from YouTube, Instagram, TikTok and 1,000+ other sites, or save videos 
 | ✂️ **Clips**             | Grab just a part: "from 12:30 to 16:05"                                                                |
 | 📃 **Playlists**         | Tick the items you want, they go straight to the queue                                                 |
 | 📚 **Library**           | Save videos and music inside Decant instead of your Downloads folder, and watch them offline. Playlists stay together, a video you already have is never downloaded twice, and you can pick several at once to copy or remove them |
+| 🧹 **Auto cleanup**      | Optional: videos you finish move to *To delete*, then are deleted after the delay you pick (7 days by default). A playlist goes once all of it is watched. Restore anything, or pin a video to always keep it |
 | ▶️ **Player**            | Chapters on the seek bar, subtitles you can restyle, speed, theater and mini player, and the keyboard shortcuts you'd expect (press `?` to see them). Picks up where you left off |
 | 🪟 **Picture-in-picture** | Switch to another app while a video plays and it keeps going in a small floating window                |
 | ⏬ **Queue**             | Line up as many downloads as you like, two run at once, with speed and time left                       |
@@ -164,6 +165,8 @@ Above 1080p, YouTube only offers VP9 or AV1. The MP4 plays fine in [VLC](https:/
 <summary><b>Where does the library keep my videos?</b></summary>
 
 In Decant's own data folder, so they don't clutter your Downloads: `~/Library/Application Support/Decant/Library` on macOS, `%APPDATA%\Decant\Library` on Windows, `~/.config/Decant/Library` on Linux. To get a regular file out, use **Save a copy…** on a video. Removing a video from the library deletes its file.
+
+To clear out what you've watched, turn on **Auto cleanup** in Settings: a video you finish (less than 30 seconds left) moves to **To delete** in the library, where it waits before being deleted (7 days by default; 1, 3, 14 or 30 days, or right away). A video from a playlist waits until the whole playlist is watched, then they go together. Until then, use the **⋯** menu to restore it, delete it now, or choose **Always keep** so it's never deleted automatically. Songs are left alone unless you turn on *Songs too*.
 </details>
 
 <details>

@@ -70,6 +70,9 @@ const ICONS = {
   playlist: 'M4 6h12M4 11h12M4 16h7M15 14.5v6l5-3z',
   shuffle: 'M3 7h3.5c2 0 3.2 1 4.3 2.7l2.4 4.6c1.1 1.7 2.3 2.7 4.3 2.7H21M3 17h3.5c1.4 0 2.4-.5 3.2-1.4M14.3 8.4c.8-.9 1.8-1.4 3.2-1.4H21M18 4l3 3-3 3M18 14l3 3-3 3',
   chevron: 'M9 6l6 6-6 6',
+  more: 'M5 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0M11 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0M17 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0',
+  pin: 'M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z',
+  restore: 'M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4M12 8v4l3 2',
 };
 
 function icon(name) {
@@ -671,13 +674,118 @@ function updateJob(job) {
 const mediaUrl = (item) => `decant-media://${item.id}/media`;
 const coverUrl = (item) => (item.cover ? `decant-media://${item.id}/cover` : item.thumbnail);
 
-function libraryItems() {
+// --- Library: auto cleanup ("To delete") ---
+
+const DAY = 24 * 60 * 60 * 1000;
+const CLEANUP_DELAYS = [0, 1, 3, 7, 14, 30];
+const matches = (entry) => {
   const query = state.librarySearch.trim().toLowerCase();
-  return state.library.filter(
-    (item) =>
-      (state.libraryFilter === 'all' || item.kind === state.libraryFilter) &&
-      (!query || `${item.title} ${item.uploader || ''}`.toLowerCase().includes(query)),
+  return !query || `${entry.title} ${entry.uploader || ''}`.toLowerCase().includes(query);
+};
+// A video in "To delete" that went there with its playlist shows as part of it.
+const withTrashedPlaylist = (item) => item.trashedWith && state.playlists.some((p) => p.id === item.trashedWith && p.trashedAt);
+const trashedItems = () => state.library.filter((i) => i.trashedAt && !withTrashedPlaylist(i));
+const trashedPlaylists = () => state.playlists.filter((p) => p.trashedAt);
+const trashCount = () => trashedItems().length + trashedPlaylists().length;
+
+// "Deleted in 6 days", "Deleted in 5 hours", "Deleted soon"
+function deleteIn(trashedAt) {
+  const days = CLEANUP_DELAYS.includes(state.settings.cleanupDelayDays) ? state.settings.cleanupDelayDays : 7;
+  const left = trashedAt + days * DAY - Date.now();
+  if (left <= 60 * 60 * 1000) return t('Deleted soon');
+  if (left < DAY) return t('Deleted in {n} hours', { n: Math.ceil(left / (60 * 60 * 1000)) });
+  return t('Deleted in {n} days', { n: Math.ceil(left / DAY) });
+}
+
+async function restoreFromTrash(what) {
+  applyLibrary(await api.library.restore(what));
+}
+
+async function deleteFromTrash(what, count) {
+  if (!(await withDialog(() => confirm(t('Remove {n} items from your library? Their files will be deleted.', { n: count }))))) return;
+  if (player && what.items?.includes(player.item.id)) stopPlayer();
+  applyLibrary(await api.library.deleteNow(what));
+}
+
+// Tells when videos move to "To delete" by themselves, with a way back.
+function announceTrash(before) {
+  const fresh = [
+    ...trashedItems().filter((i) => !before.has(`i${i.id}`)).map((i) => ({ items: [i.id], title: i.title })),
+    ...trashedPlaylists().filter((p) => !before.has(`p${p.id}`)).map((p) => ({ playlists: [p.id], title: p.title, playlist: true })),
+  ];
+  if (!fresh.length) return;
+  const what = { items: fresh.flatMap((f) => f.items || []), playlists: fresh.flatMap((f) => f.playlists || []) };
+  const [one] = fresh;
+  const text =
+    fresh.length > 1
+      ? t('{n} items moved to “To delete”.', { n: fresh.length })
+      : one.playlist
+        ? t('Playlist “{title}” watched: moved to “To delete”.', { title: one.title })
+        : t('“{title}” moved to “To delete”.', { title: one.title });
+  toast(text, t('Undo'), () => restoreFromTrash(what));
+}
+
+const trashKeys = () => new Set([...trashedItems().map((i) => `i${i.id}`), ...trashedPlaylists().map((p) => `p${p.id}`)]);
+
+// A short message at the bottom of the window, with one action.
+let toastTimer = null;
+function toast(text, actionLabel, onAction) {
+  let box = $('#toast');
+  if (!box) box = document.body.appendChild(h('div', { id: 'toast', class: 'toast', role: 'status' }));
+  const hide = () => box.classList.remove('shown');
+  box.replaceChildren(
+    h('span', {}, text),
+    actionLabel
+      ? h('button', { class: 'link', onclick: () => {
+          hide();
+          onAction();
+        } }, actionLabel)
+      : null,
   );
+  box.classList.add('shown');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(hide, 8000);
+}
+
+// A small menu under a "⋯" button: [{ label, icon, onclick, danger }].
+function openMenuAt(button, entries) {
+  closeTileMenu();
+  const menu = h(
+    'div',
+    { class: 'popover', role: 'menu' },
+    entries.filter(Boolean).map((e) =>
+      h('button', { role: 'menuitem', class: e.danger ? 'danger' : null, onclick: (ev) => {
+        ev.stopPropagation();
+        closeTileMenu();
+        e.onclick();
+      } }, e.icon ? icon(e.icon) : null, e.label),
+    ),
+  );
+  document.body.append(menu);
+  const r = button.getBoundingClientRect();
+  const left = Math.min(r.right - menu.offsetWidth, window.innerWidth - menu.offsetWidth - 8);
+  const below = r.bottom + 4 + menu.offsetHeight < window.innerHeight;
+  menu.style.left = `${Math.max(8, left)}px`;
+  menu.style.top = `${below ? r.bottom + 4 : r.top - menu.offsetHeight - 4}px`;
+  setTimeout(() => {
+    document.addEventListener('click', closeTileMenu, { once: true });
+  });
+}
+
+function closeTileMenu() {
+  document.querySelector('.popover')?.remove();
+}
+
+function moreButton(entries) {
+  return iconButton('more', t('More'), (e) => {
+    e.stopPropagation();
+    openMenuAt(e.currentTarget, entries);
+  });
+}
+
+function libraryItems() {
+  if (state.libraryFilter === 'trash') return trashedItems().filter(matches);
+  return state.library.filter((item) => !item.trashedAt && (state.libraryFilter === 'all' || item.kind === state.libraryFilter) && matches(item));
 }
 
 function renderTile(item) {
@@ -700,6 +808,7 @@ function renderTile(item) {
       { class: 'tile-art' },
       thumb(coverUrl(item)),
       state.selection ? h('span', { class: 'tile-check' }, selected ? icon('check') : null) : null,
+      item.keep && !state.selection ? h('span', { class: 'tile-keep', title: t('Always kept: never deleted automatically') }, icon('pin')) : null,
       h('span', { class: 'tile-play' }, icon('play')),
       item.duration ? h('span', { class: 'badge' }, formatDuration(item.duration)) : null,
       progress ? h('div', { class: 'tile-progress' }, h('div', { style: `width: ${progress}%` })) : null,
@@ -712,23 +821,36 @@ function renderTile(item) {
         { class: 'tile-text' },
         h('div', { class: 'tile-title' }, item.title),
         h('div', { class: 'row-sub' }, h('span', { class: 'tag' }, item.kind === 'audio' ? t('Audio') : t('Video')), item.uploader ? h('span', {}, item.uploader) : null),
+        item.trashedAt ? h('div', { class: 'tile-countdown' }, deleteIn(item.trashedAt)) : null,
       ),
-      h(
-        'div',
-        { class: 'tile-actions' },
-        iconButton('export', t('Save a copy…'), stop(() => withDialog(() => api.library.export(item.id)))),
-        iconButton(
-          'trash',
-          t('Remove from library'),
-          stop(async () => {
-            if (!(await withDialog(() => confirm(t('Remove “{title}” from your library? The file will be deleted.', { title: item.title }))))) return;
-            if (player?.item.id === item.id) stopPlayer();
-            applyLibrary(await api.library.remove(item.id));
-          }),
-        ),
-      ),
+      h('div', { class: 'tile-actions' }, moreButton(tileMenu(item))),
     ),
   );
+}
+
+function tileMenu(item) {
+  const remove = async () => {
+    if (!(await withDialog(() => confirm(t('Remove “{title}” from your library? The file will be deleted.', { title: item.title }))))) return;
+    if (player?.item.id === item.id) stopPlayer();
+    applyLibrary(await api.library.remove(item.id));
+  };
+  const keep = async (on) => applyLibrary(await api.library.keep(item.id, on));
+  if (item.trashedAt) {
+    return [
+      { label: t('Restore'), icon: 'restore', onclick: () => restoreFromTrash({ items: [item.id] }) },
+      { label: t('Always keep'), icon: 'pin', onclick: () => keep(true) },
+      { label: t('Delete now'), icon: 'trash', danger: true, onclick: remove },
+    ];
+  }
+  return [
+    { label: t('Save a copy…'), icon: 'export', onclick: () => withDialog(() => api.library.export(item.id)) },
+    item.keep
+      ? { label: t('Stop always keeping'), icon: 'pin', onclick: () => keep(false) }
+      : state.settings.autoCleanup
+        ? { label: t('Always keep'), icon: 'pin', onclick: () => keep(true) }
+        : null,
+    { label: t('Remove from library'), icon: 'trash', danger: true, onclick: remove },
+  ];
 }
 
 // --- Library: picking several items ---
@@ -766,6 +888,12 @@ function renderSelectionBar() {
       allPicked ? t('Deselect all') : t('Select all'),
     ),
     h('span', { class: 'spacer' }),
+    state.libraryFilter === 'trash'
+      ? h('button', { class: 'btn small', disabled: !ids.length, onclick: () => {
+          state.selection = null;
+          restoreFromTrash({ items: ids });
+        } }, icon('restore'), t('Restore'))
+      : null,
     h('button', { class: 'btn small', disabled: !ids.length, onclick: () => withDialog(() => api.library.exportMany(ids)) }, icon('export'), t('Save copies…')),
     h(
       'button',
@@ -787,12 +915,14 @@ function renderSelectionBar() {
 }
 
 function renderLibrary() {
-  const all = state.library;
+  const all = state.library.filter((i) => !i.trashedAt);
+  const inTrash = trashCount();
+  if (state.libraryFilter === 'trash' && !inTrash && !state.settings.autoCleanup) state.libraryFilter = 'all';
   // Picking works on the videos and songs, not on playlists.
   if (state.selection && state.libraryFilter === 'playlists') state.selection = null;
-  if (state.selection) for (const id of state.selection) if (!all.some((i) => i.id === id)) state.selection.delete(id);
+  if (state.selection) for (const id of state.selection) if (!state.library.some((i) => i.id === id)) state.selection.delete(id);
   $('#tab-library').classList.toggle('selecting', Boolean(state.selection));
-  $('#library-select').hidden = Boolean(state.selection) || state.libraryFilter === 'playlists' || !all.length;
+  $('#library-select').hidden = Boolean(state.selection) || state.libraryFilter === 'playlists' || !libraryItems().length;
   renderSelectionBar();
   $('#library-count').textContent = all.length ? all.length : '';
   $('#library-filter').replaceChildren(
@@ -801,7 +931,8 @@ function renderLibrary() {
         ['all', t('All')],
         ['video', t('Videos')],
         ['audio', t('Audio')],
-        ['playlists', state.playlists.length ? `${t('Playlists')} ${state.playlists.length}` : t('Playlists')],
+        ['playlists', livePlaylists().length ? `${t('Playlists')} ${livePlaylists().length}` : t('Playlists')],
+        ...(state.settings.autoCleanup || inTrash ? [['trash', inTrash ? `${t('To delete')} ${inTrash}` : t('To delete')]] : []),
       ],
       state.libraryFilter,
       (filter) => {
@@ -814,20 +945,28 @@ function renderLibrary() {
   const grid = $('#library-grid');
   const view = $('#library-playlist');
   const empty = $('#library-empty');
-  const open = state.libraryFilter === 'playlists' && state.playlists.find((p) => p.id === state.openPlaylist);
+  const open = ['playlists', 'trash'].includes(state.libraryFilter) && state.playlists.find((p) => p.id === state.openPlaylist);
   if (!open) state.openPlaylist = null;
   grid.hidden = Boolean(open);
   view.hidden = !open;
 
+  renderTrashBar(!open && state.libraryFilter === 'trash');
   if (open) {
     view.replaceChildren(...renderPlaylistView(open));
     empty.hidden = true;
   } else if (state.libraryFilter === 'playlists') {
-    const query = state.librarySearch.trim().toLowerCase();
-    const lists = state.playlists.filter((p) => !query || `${p.title} ${p.uploader || ''}`.toLowerCase().includes(query));
+    const lists = livePlaylists().filter(matches);
     grid.replaceChildren(...lists.map(renderPlaylistTile));
     empty.hidden = lists.length > 0;
-    empty.textContent = state.playlists.length ? t('Nothing matches.') : t('No playlists yet. Open a playlist link and choose “Save to library”.');
+    empty.textContent = livePlaylists().length ? t('Nothing matches.') : t('No playlists yet. Open a playlist link and choose “Save to library”.');
+  } else if (state.libraryFilter === 'trash') {
+    const lists = trashedPlaylists().filter(matches);
+    const items = libraryItems();
+    grid.replaceChildren(...lists.map(renderPlaylistTile), ...items.map(renderTile));
+    empty.hidden = lists.length + items.length > 0;
+    if (inTrash) empty.textContent = t('Nothing matches.');
+    else if (state.settings.autoCleanup) empty.textContent = t('Nothing to delete. Videos you finish wait here before they are deleted.');
+    else empty.textContent = t('Auto cleanup is off. Turn it on in Settings to clear out the videos you have watched.');
   } else {
     const items = libraryItems();
     grid.replaceChildren(...items.map(renderTile));
@@ -835,14 +974,36 @@ function renderLibrary() {
     if (all.length && !items.length) empty.textContent = t('Nothing matches.');
     else empty.textContent = t('Your library is empty. Choose “Save to library” on a video to watch it here, even offline.');
   }
-  const size = all.reduce((total, i) => total + (i.size || 0), 0);
+  // Videos in "To delete" still take room until they are deleted.
+  const size = state.library.reduce((total, i) => total + (i.size || 0), 0);
   $('#library-usage').textContent = all.length ? t('{items} · {size} on this computer', { items: t('{n} items', { n: all.length }), size: formatBytes(size) }) : '';
 }
 
 function applyLibrary({ items, playlists }) {
+  const before = state.libraryLoaded ? trashKeys() : null;
   state.library = items;
   state.playlists = playlists;
+  state.libraryLoaded = true;
+  if (before) announceTrash(before);
   renderLibrary();
+}
+
+const livePlaylists = () => state.playlists.filter((p) => !p.trashedAt);
+
+// Above "To delete": what happens here, and everything at once.
+function renderTrashBar(show) {
+  const bar = $('#library-trash');
+  const count = trashCount();
+  bar.hidden = !show || !count || Boolean(state.selection);
+  if (bar.hidden) return bar.replaceChildren();
+  const days = CLEANUP_DELAYS.includes(state.settings.cleanupDelayDays) ? state.settings.cleanupDelayDays : 7;
+  const everything = () => ({ items: trashedItems().map((i) => i.id), playlists: trashedPlaylists().map((p) => p.id) });
+  bar.replaceChildren(
+    h('span', { class: 'hint' }, days ? t('Watched videos wait here {n} days, then are deleted.', { n: days }) : t('Watched videos are deleted as soon as you leave them.')),
+    h('span', { class: 'spacer' }),
+    h('button', { class: 'btn small', onclick: () => restoreFromTrash(everything()) }, icon('restore'), t('Restore all')),
+    h('button', { class: 'btn small danger', onclick: () => deleteFromTrash(everything(), count) }, icon('trash'), t('Delete all now')),
+  );
 }
 
 // --- Library: playlists ---
@@ -893,7 +1054,18 @@ function renderPlaylistTile(playlist) {
         { class: 'tile-text' },
         h('div', { class: 'tile-title' }, playlist.title),
         h('div', { class: 'row-sub' }, h('span', { class: 'tag' }, t('Playlist')), playlist.uploader ? h('span', {}, playlist.uploader) : null),
+        playlist.trashedAt ? h('div', { class: 'tile-countdown' }, deleteIn(playlist.trashedAt)) : null,
       ),
+      playlist.trashedAt
+        ? h(
+            'div',
+            { class: 'tile-actions' },
+            moreButton([
+              { label: t('Restore'), icon: 'restore', onclick: () => restoreFromTrash({ playlists: [playlist.id] }) },
+              { label: t('Delete now'), icon: 'trash', danger: true, onclick: () => deleteFromTrash({ playlists: [playlist.id] }, count) },
+            ]),
+          )
+        : null,
     ),
   );
 }
@@ -924,6 +1096,7 @@ function renderPlaylistView(playlist) {
         { class: 'playlist-actions' },
         h('button', { class: 'btn primary', disabled: !items.length, onclick: () => playPlaylist(playlist, 0) }, icon('play'), t('Play all')),
         h('button', { class: 'btn', disabled: items.length < 2, onclick: () => playPlaylist(playlist, 0, { shuffle: true }) }, icon('shuffle'), t('Shuffle')),
+        playlist.trashedAt ? h('button', { class: 'btn', onclick: () => restoreFromTrash({ playlists: [playlist.id] }) }, icon('restore'), t('Restore')) : null,
         playlist.url ? h('button', { class: 'btn', onclick: () => api.openLink(playlist.url) }, t('Open original')) : null,
         iconButton('trash', t('Delete playlist'), async () => {
           if (!(await withDialog(() => confirm(t('Delete the playlist “{title}”? Its videos stay in your library.', { title: playlist.title }))))) return;
@@ -973,8 +1146,9 @@ function renderPlaylistView(playlist) {
         },
       },
       icon('back'),
-      t('Playlists'),
+      state.libraryFilter === 'trash' ? t('To delete') : t('Playlists'),
     ),
+    playlist.trashedAt ? h('p', { class: 'hint' }, deleteIn(playlist.trashedAt)) : null,
     head,
     h('ol', { class: 'rows playlist-rows' }, rows),
   ];
@@ -1125,15 +1299,17 @@ function openPlayer(item, { queue = null, mini = false } = {}) {
   const listeners = new AbortController();
   const on = (target, type, fn) => target.addEventListener(type, fn, { signal: listeners.signal });
   let lastSave = 0;
-  const save = (position = media.currentTime) => {
+  const save = (position = media.currentTime, { ended = false } = {}) => {
     // While the video moves to or from the PiP window it briefly reads 0 s.
     if (player?.media === media && player.moving) return;
     lastSave = Date.now();
     const duration = Number.isFinite(media.duration) ? media.duration : undefined;
     Object.assign(item, { position, ...(duration ? { duration } : {}) });
-    api.library.progress(item.id, { position, duration });
+    api.library.progress(item.id, { position, duration, ended });
   };
   player = { item, media, save, listeners, queue, mini: false, chapter: null, track: null, segments: [] };
+  // Auto cleanup never deletes what is playing.
+  api.library.playing(item.id);
 
   on(media, 'loadedmetadata', () => {
     // Picks up where it was left, unless that was the very end.
@@ -1167,7 +1343,7 @@ function openPlayer(item, { queue = null, mini = false } = {}) {
     if (!document.hasFocus() && Date.now() - (player.movedAt || 0) > 1500) setTimeout(autoPip, 200);
   });
   on(media, 'ended', () => {
-    save(0);
+    save(0, { ended: true });
     playAdjacent(1);
   });
   on(media, 'ratechange', () => (state.speed = media.playbackRate));
@@ -2268,6 +2444,7 @@ function stopPlayer({ keepPip = false } = {}) {
   media.pause();
   media.removeAttribute('src');
   media.load();
+  api.library.playing(null);
   player = null;
   if ('mediaSession' in navigator) navigator.mediaSession.metadata = null;
   for (const id of ['#player', '#mini-player']) {
@@ -2429,6 +2606,23 @@ function renderSettings() {
         ? row(t('MP3 quality'), segmented(MP3_BITRATES.map((b) => [b, `${b} kbps`]), s.defaultAudioQuality, (defaultAudioQuality) => set({ defaultAudioQuality })))
         : null,
     ]),
+    group(t('Auto cleanup'), t('Videos you finish (less than 30 s left) go to “To delete” in your library, then are deleted after a while. A playlist waits until all of it is watched, then goes as a whole.'), [
+      row(t('Clear out watched videos'), segmented([[true, t('On')], [false, t('Off')]], Boolean(s.autoCleanup), (autoCleanup) => set({ autoCleanup }))),
+      s.autoCleanup
+        ? row(
+            t('Delete after'),
+            segmented(
+              CLEANUP_DELAYS.map((d) => [d, d ? t('{n} days', { n: d }) : t('Right away')]),
+              CLEANUP_DELAYS.includes(s.cleanupDelayDays) ? s.cleanupDelayDays : 7,
+              (cleanupDelayDays) => set({ cleanupDelayDays }),
+            ),
+            t('Until then you can still watch them, restore them or keep them for good.'),
+          )
+        : null,
+      s.autoCleanup
+        ? row(t('Songs too'), segmented([[true, t('On')], [false, t('Off')]], Boolean(s.cleanupAudio), (cleanupAudio) => set({ cleanupAudio })), t('Off by default: songs are often played again.'))
+        : null,
+    ]),
     group(
       t('Player'),
       null,
@@ -2538,6 +2732,7 @@ async function init() {
     renderLibrary();
   });
   document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.querySelector('.popover')) return closeTileMenu();
     if (e.key === 'Escape' && state.selection && !$('#tab-library').hidden) stopSelecting();
   });
   document.addEventListener('keydown', onPlayerKey);

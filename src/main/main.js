@@ -12,6 +12,7 @@ const i18n = require('../renderer/i18n.js');
 const { t } = i18n;
 const { Queue } = require('./queue');
 const links = require('./links');
+const cleanup = require('./cleanup');
 
 // One Decant at a time: a decant:// link opened while it runs goes to the
 // window already open (see 'second-instance').
@@ -244,7 +245,9 @@ function registerIpc() {
   ipcMain.handle('settings:get', () => ({ ...settings.get(), outputDir: outputDir() }));
   ipcMain.handle('settings:set', (_e, patch) => {
     if ('language' in patch) i18n.setLanguage(patch.language, app.getLocale());
-    return settings.set(patch);
+    const saved = settings.set(patch);
+    if (['autoCleanup', 'cleanupDelayDays', 'cleanupAudio'].some((key) => key in patch)) runCleanup();
+    return saved;
   });
 
   ipcMain.handle('folder:choose', async () => {
@@ -314,12 +317,51 @@ function registerIpc() {
     return library.snapshot();
   });
   ipcMain.handle('library:progress', (_e, id, patch) => {
-    const { position, duration } = patch;
+    const { position, duration, ended } = patch;
+    const item = library.get(id);
+    if (!item) return;
+    const length = Number.isFinite(duration) ? duration : item.duration;
+    // Watched to the end: remembered, since the player then goes back to 0.
+    const finished = !item.finishedAt && (ended || cleanup.isFinished(position, length));
     library.update(id, {
       position: Number.isFinite(position) ? position : 0,
       ...(Number.isFinite(duration) ? { duration } : {}),
+      ...(finished ? { finishedAt: Date.now() } : {}),
       watched: Date.now(),
     });
+    if (finished) runCleanup();
+  });
+  ipcMain.handle('library:playing', (_e, id) => {
+    playingId = id || null;
+  });
+  // Back from "To delete": videos, or a playlist with its videos.
+  ipcMain.handle('library:restore', (_e, { items = [], playlists = [] } = {}) => {
+    const { items: all, playlists: lists } = library.snapshot();
+    const back = new Set([...items, ...all.filter((i) => playlists.includes(i.trashedWith)).map((i) => i.id)]);
+    library.replace({
+      items: all.map((i) => (back.has(i.id) ? cleanup.restoreItem(i) : i)),
+      playlists: lists.map((p) => (playlists.includes(p.id) ? cleanup.clean(p) : p)),
+    });
+    return library.snapshot();
+  });
+  ipcMain.handle('library:keep', (_e, id, keep) => {
+    const item = library.get(id);
+    if (item) library.update(id, keep ? { ...cleanup.clean(item), keep: true } : { keep: false });
+    runCleanup();
+    return library.snapshot();
+  });
+  // "Delete now" from "To delete": the videos, and playlists with theirs.
+  ipcMain.handle('library:deleteNow', (_e, { items = [], playlists = [] } = {}) => {
+    const { items: all, playlists: lists } = library.snapshot();
+    const gone = new Set([...items, ...all.filter((i) => playlists.includes(i.trashedWith)).map((i) => i.id)]);
+    library.replace(
+      {
+        items: all.filter((i) => !gone.has(i.id)),
+        playlists: lists.filter((p) => !playlists.includes(p.id)).map((p) => ({ ...p, entries: p.entries.filter((e) => !gone.has(e.id)) })),
+      },
+      [...gone],
+    );
+    return library.snapshot();
   });
   ipcMain.handle('library:export', (_e, id) => exportLibraryItem(id));
   ipcMain.handle('library:exportMany', (_e, ids) => exportLibraryItems(ids));
@@ -358,6 +400,18 @@ function registerIpc() {
     settings.set({ lastEngineUpdate: Date.now() });
     return version;
   });
+}
+
+// --- Auto cleanup ---------------------------------------------------------------
+// Runs at launch, every hour, and when a video ends or the settings change.
+
+let playingId = null;
+
+function runCleanup() {
+  const result = cleanup.sweep(library.snapshot(), settings.get(), Date.now(), { playing: playingId });
+  if (!result.changed) return;
+  library.replace(result, result.deleted);
+  send('library:update', library.snapshot());
 }
 
 function focusWindow() {
@@ -553,6 +607,8 @@ app.whenReady().then(() => {
   if (!singleInstance) return;
   i18n.setLanguage(settings.get().language, app.getLocale());
   library.prune();
+  runCleanup();
+  setInterval(runCleanup, 60 * 60 * 1000);
   protocol.handle('decant-media', serveLibrary);
   registerIpc();
   registerLinkHandler();
