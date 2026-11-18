@@ -39,7 +39,7 @@ Download from YouTube, Instagram, TikTok and 1,000+ other sites, or save videos 
 | 🔎 **Search**            | No link? Type a few words and Decant searches YouTube                                                  |
 | 🕘 **History**           | Find, open or re-download anything you got before                                                      |
 | 🍪 **Browser cookies**   | Uses your browser session for Instagram, private or age-restricted videos                              |
-| 🔄 **Always up to date** | The download engine updates itself daily, because sites change all the time                           |
+| 🔄 **Always up to date** | The download engine updates itself daily, because sites change all the time. Decant itself tells you when a new version is out: one click downloads it, one more restarts on it, no reinstalling (turn it off or check by hand in **Settings → Updates**) |
 | 🌍 **Your language**     | English, French, Spanish, German, Italian or Portuguese, following your system or picked in Settings    |
 
 <div align="center">
@@ -94,14 +94,14 @@ Decant opens on the video, ready for you to choose audio or video and the qualit
 
 It isn't on the Chrome Web Store yet, so it installs in developer mode:
 
-1. Download **`Decant-Extension-x.y.z.zip`** from the [same release](https://github.com/m1shko/decant/releases/latest) as Decant, and unzip it somewhere it can stay (your Documents folder, say): the browser loads it from there.
+1. Open Decant's **Settings → Browser extension**: Decant keeps the extension in a folder of its own, and shows it there. Click **Copy the path**.
 2. Open `chrome://extensions` (or `edge://extensions`, `brave://extensions`…) and turn on **Developer mode** (top right in Chrome, left side in Edge).
-3. Click **Load unpacked** and pick the **Decant-Extension** folder.
+3. Click **Load unpacked**, then go to the folder: on a Mac press <kbd>⌘</kbd><kbd>⇧</kbd><kbd>G</kbd> and paste the path, on Windows paste it in the address bar, on Linux press <kbd>Ctrl</kbd><kbd>L</kbd> and paste it.
 4. Pin it: puzzle-piece icon in the toolbar → pin next to *Send to Decant*.
 
 The first time you send something, the browser asks whether to open Decant: tick **Always allow** and click **Open**. It asks once for the buttons on YouTube and once for the toolbar button and right-click menu.
 
-To update, unzip the new version in the same place, replacing the old **Decant-Extension** folder, and click the ↻ button on the extension's card in `chrome://extensions`. Firefox and Safari aren't supported yet.
+**Updates are automatic:** when Decant updates, it refreshes the extension in that folder, and the extension reloads itself within a few minutes (pages already open need a refresh to get the new buttons). Installed it from a `Decant-Extension-x.y.z.zip` before? Remove that one and load Decant's folder instead, once, to get the updates. Firefox and Safari aren't supported yet.
 
 > [!NOTE]
 > Use the Decant from the same release as the extension, and open it once after installing it, so your system knows Decant opens `decant://` links (on macOS, move it to Applications first).

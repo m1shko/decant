@@ -50,5 +50,14 @@ contextBridge.exposeInMainWorld('decant', {
   focusWindow: invoke('window:focus'),
   links: { ready: invoke('links:ready'), onIncoming: listen('link:incoming') },
   readClipboard: invoke('clipboard:read'),
+  updates: {
+    get: invoke('update:get'),
+    check: invoke('update:check'),
+    download: invoke('update:download'),
+    install: invoke('update:install'),
+    openPage: invoke('update:page'),
+    onState: listen('update:state'),
+  },
+  extension: { info: invoke('extension:info'), reveal: invoke('extension:reveal'), copyPath: invoke('extension:copyPath') },
   engine: { version: invoke('engine:version'), update: invoke('engine:update'), onVersion: listen('engine:version') },
 });

@@ -2632,6 +2632,8 @@ function renderSettings() {
         t('Opens by itself when you switch to another app while a video plays.'),
       ),
     ),
+    updatesGroup(s, set, row, group),
+    extensionGroup(row, group),
   );
 }
 
@@ -2646,6 +2648,7 @@ function changeLanguage(lang) {
   renderHistory();
   renderSettings();
   showVersion(state.engineVersion);
+  renderUpdate();
   if (player) player.mini ? minimizePlayer() : expandPlayer();
   if (pip) renderPip();
 }
@@ -2658,6 +2661,137 @@ function applyLanguage() {
   for (const el of document.querySelectorAll('[data-i18n-placeholder]')) el.placeholder = t(el.dataset.i18nPlaceholder);
   for (const el of document.querySelectorAll('[data-i18n-aria-label]')) el.setAttribute('aria-label', t(el.dataset.i18nAriaLabel));
   for (const el of document.querySelectorAll('[data-i18n-title]')) el.title = t(el.dataset.i18nTitle);
+}
+
+// --- New versions of Decant -----------------------------------------------------
+// A card in the corner when a new version is out: "Update" downloads it,
+// "Restart" puts it in place. Closing it hides it until the next launch.
+
+function showUpdate(update) {
+  state.update = update;
+  renderUpdate();
+  if (!$('#tab-settings').hidden) renderSettings();
+}
+
+function activeDownloads() {
+  return [...state.jobs.values()].filter((j) => ['queued', 'downloading', 'processing'].includes(j.status)).length;
+}
+
+async function restartToUpdate() {
+  const busy = activeDownloads();
+  if (busy && !confirm(t('{n} downloads are not finished. Restart anyway? They will stop.', { n: busy }))) return;
+  if (player) player.save();
+  try {
+    await api.updates.install();
+  } catch (err) {
+    notice(cleanError(err), 'error');
+  }
+}
+
+function renderUpdate() {
+  const u = state.update;
+  let box = $('#update-card');
+  if (!u || state.updateHidden === u.version) {
+    box?.remove();
+    return;
+  }
+  if (!box) box = document.body.appendChild(h('div', { id: 'update-card', class: 'update-card', role: 'status' }));
+  const close = iconButton('close', t('Later'), () => {
+    state.updateHidden = u.version;
+    renderUpdate();
+  });
+  const notes = h('button', { class: 'link', onclick: () => api.updates.openPage() }, t('What’s new'));
+  let text;
+  let actions;
+  if (u.status === 'downloading') {
+    text = [h('strong', {}, t('Downloading Decant {version}…', { version: u.version })), h('div', { class: 'update-bar' }, h('span', { style: `width: ${u.percent || 0}%` }))];
+    actions = [h('span', { class: 'muted' }, `${u.percent || 0}%`)];
+  } else if (u.status === 'ready') {
+    text = [h('strong', {}, t('Decant {version} is ready', { version: u.version })), h('span', { class: 'muted' }, t('Restart Decant to finish updating.'))];
+    actions = [notes, h('button', { class: 'btn small primary', onclick: restartToUpdate }, t('Restart now'))];
+  } else if (u.status === 'error') {
+    text = [h('strong', {}, t('The update failed')), h('span', { class: 'muted', title: u.error || '' }, u.error || '')];
+    actions = [h('button', { class: 'link', onclick: () => api.openLink(u.page) }, t('Download from the website')), h('button', { class: 'btn small', onclick: () => api.updates.download() }, t('Try again'))];
+  } else {
+    const manual = u.kind === 'manual';
+    text = [h('strong', {}, t('Decant {version} is available', { version: u.version })), h('span', { class: 'muted' }, t('You have version {version}.', { version: state.appVersion }))];
+    actions = [notes, h('button', { class: 'btn small primary', onclick: () => api.updates.download() }, manual ? t('Download') : t('Update'))];
+  }
+  box.replaceChildren(h('div', { class: 'update-text' }, text), h('div', { class: 'update-actions' }, actions));
+  if (u.status !== 'downloading') box.append(close);
+}
+
+async function checkUpdatesNow() {
+  state.updateCheck = 'checking';
+  renderSettings();
+  try {
+    const { update } = await api.updates.check();
+    state.updateHidden = null;
+    state.updateCheck = update ? null : 'latest';
+    showUpdate(update || state.update);
+  } catch (err) {
+    state.updateCheck = 'failed';
+  }
+  renderSettings();
+}
+
+function updatesGroup(s, set, row, group) {
+  const u = state.update;
+  const status =
+    state.updateCheck === 'checking'
+      ? t('Checking…')
+      : u
+        ? t('Decant {version} is available', { version: u.version })
+        : state.updateCheck === 'latest'
+          ? t('Decant is up to date.')
+          : state.updateCheck === 'failed'
+            ? t('Could not check for updates. Are you online?')
+            : null;
+  return group(t('Updates'), null, [
+    row(
+      t('Version'),
+      h('div', { class: 'update-row' }, h('span', {}, `Decant ${state.appVersion || ''}`), h('button', { class: 'btn small', disabled: state.updateCheck === 'checking', onclick: checkUpdatesNow }, t('Check for updates'))),
+      status,
+    ),
+    row(
+      t('Check at launch'),
+      segmented([[true, t('On')], [false, t('Off')]], s.checkUpdates !== false, (checkUpdates) => set({ checkUpdates })),
+      t('Decant asks GitHub whether a new version is out. Nothing is installed without you.'),
+    ),
+  ]);
+}
+
+// The browser extension lives in a folder Decant keeps up to date: loading it
+// from there once is all it takes.
+function extensionGroup(row, group) {
+  const info = state.extension;
+  if (!info) return null;
+  const tip = { darwin: t('In the window that opens, press ⌘⇧G and paste the path.'), win32: t('In the window that opens, paste the path in the address bar.') }[api.platform] || t('In the window that opens, press Ctrl+L and paste the path.');
+  const copy = h('button', { class: 'btn small', onclick: async () => {
+    await api.extension.copyPath();
+    copy.textContent = t('Copied');
+    setTimeout(() => (copy.textContent = t('Copy the path')), 2000);
+  } }, t('Copy the path'));
+  return group(t('Browser extension'), t('Decant keeps the extension up to date in this folder, and it reloads itself after each update.'), [
+    row(
+      t('Folder'),
+      [
+        h('code', { class: 'extension-path' }, info.folder),
+        h('div', { class: 'update-row' }, copy, h('button', { class: 'btn small', onclick: () => api.extension.reveal() }, t('Show the folder'))),
+      ],
+      info.error || null,
+    ),
+    row(
+      t('Install'),
+      h(
+        'ol',
+        { class: 'extension-steps' },
+        h('li', {}, t('Open chrome://extensions (or edge://, brave://…) and turn on Developer mode.')),
+        h('li', {}, t('Click Load unpacked and pick this folder.'), ' ', h('span', { class: 'hint' }, tip)),
+      ),
+      t('Installed it from a downloaded .zip before? Remove that one and load this folder instead, to get the updates.'),
+    ),
+  ]);
 }
 
 // --- Tabs, destination, footer ----------------------------------------------
@@ -2792,6 +2926,13 @@ async function init() {
 
   api.engine.version().then(showVersion);
   api.engine.onVersion(showVersion);
+
+  api.extension.info().then((info) => (state.extension = info));
+  api.updates.onState(showUpdate);
+  api.updates.get().then(({ current, update }) => {
+    state.appVersion = current;
+    showUpdate(update);
+  });
   $('#engine-update').addEventListener('click', async (e) => {
     const btn = e.currentTarget;
     btn.disabled = true;

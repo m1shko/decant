@@ -47,6 +47,14 @@
       {
         "from": "bin",
         "to": "bin"
+      },
+      {
+        "from": "extension",
+        "to": "extension",
+        "filter": [
+          "**/*",
+          "!**/.DS_Store"
+        ]
       }
     ],
     "mac": {

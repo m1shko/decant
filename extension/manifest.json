@@ -22,7 +22,7 @@
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["activeTab", "contextMenus", "storage"],
+  "permissions": ["activeTab", "alarms", "contextMenus", "storage"],
   "options_ui": {
     "page": "options.html"
   },
