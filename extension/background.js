@@ -46,3 +46,21 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   const [action, what] = info.menuItemId.split('-');
   send(tab, what === 'link' ? info.linkUrl : info.pageUrl, action);
 });
+
+// Decant keeps this folder up to date (see src/main/extension.js). When the
+// manifest on disk is not the one loaded, new files arrived: reload to use
+// them. Installs from a .zip never change, so they never reload.
+async function reloadIfUpdated() {
+  try {
+    const res = await fetch(chrome.runtime.getURL('manifest.json'), { cache: 'no-store' });
+    const onDisk = await res.json();
+    const loaded = chrome.runtime.getManifest();
+    if (onDisk.version !== loaded.version || onDisk.version_name !== loaded.version_name) chrome.runtime.reload();
+  } catch {}
+}
+
+chrome.alarms.create('reload-if-updated', { periodInMinutes: 5 });
+chrome.alarms.onAlarm.addListener((alarm) => alarm.name === 'reload-if-updated' && reloadIfUpdated());
+chrome.runtime.onStartup.addListener(reloadIfUpdated);
+// Also when the worker wakes up, once whatever woke it is handled.
+setTimeout(reloadIfUpdated, 3000);

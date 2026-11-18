@@ -7,7 +7,15 @@
 // lives in shadow roots, out of reach of YouTube's styles.
 (() => {
   const D = globalThis.Decant;
-  const t = (name, sub) => chrome.i18n.getMessage(name, sub == null ? undefined : String(sub)) || name;
+  // Once the extension reloads (after an update), the pages already open keep
+  // this script but lose the extension: the texts fall back to their names.
+  const t = (name, sub) => {
+    try {
+      return chrome.i18n.getMessage(name, sub == null ? undefined : String(sub)) || name;
+    } catch {
+      return name;
+    }
+  };
   const RELEASES = 'https://github.com/m1shko/decant/releases/latest';
   const LOGO = '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 6h22l-8.5 11v7.5L13.5 27V17z"/></svg>';
   const THUMB = 'img, yt-image, yt-thumbnail-view-model, ytd-thumbnail, yt-collection-thumbnail-view-model';

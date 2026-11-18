@@ -68,6 +68,8 @@ const settings = jsonFile('settings.json', {
   cleanupAudio: false,
   pipBounds: null,
   lastEngineUpdate: 0,
+  // Looks for a new version of Decant at launch (see updates.js).
+  checkUpdates: true,
 });
 
 const HISTORY_LIMIT = 300;

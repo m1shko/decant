@@ -1,9 +1,9 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, protocol, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, protocol, screen, net } = require('electron');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { execFile } = require('node:child_process');
+const { execFile, spawn } = require('node:child_process');
 const { Readable } = require('node:stream');
 const ytdlp = require('./ytdlp');
 const binaries = require('./binaries');
@@ -13,6 +13,8 @@ const { t } = i18n;
 const { Queue } = require('./queue');
 const links = require('./links');
 const cleanup = require('./cleanup');
+const updates = require('./updates');
+const extension = require('./extension');
 
 // One Decant at a time: a decant:// link opened while it runs goes to the
 // window already open (see 'second-instance').
@@ -394,6 +396,16 @@ function registerIpc() {
     return pendingLinks.splice(0);
   });
 
+  ipcMain.handle('update:get', () => ({ current: app.getVersion(), update }));
+  ipcMain.handle('update:check', async () => ({ current: app.getVersion(), update: await checkForUpdate() }));
+  ipcMain.handle('update:download', () => downloadUpdate());
+  ipcMain.handle('update:install', () => installUpdate());
+  ipcMain.handle('update:page', () => update?.page && shell.openExternal(update.page));
+
+  ipcMain.handle('extension:info', () => ({ folder: extensionFolder(), ...extensionState }));
+  ipcMain.handle('extension:reveal', () => shell.openPath(extensionFolder()));
+  ipcMain.handle('extension:copyPath', () => clipboard.writeText(extensionFolder()));
+
   ipcMain.handle('engine:version', () => binaries.version().catch(() => null));
   ipcMain.handle('engine:update', async () => {
     const version = await binaries.update();
@@ -412,6 +424,214 @@ function runCleanup() {
   if (!result.changed) return;
   library.replace(result, result.deleted);
   send('library:update', library.snapshot());
+}
+
+// --- New versions of Decant -----------------------------------------------------
+// Checked at launch (unless turned off in the settings), then once a day, or
+// when asked from the settings. "Update" downloads the new version next to
+// the old one; "Restart" puts it in place and opens it (see updates.js).
+
+let update = null;
+
+// The .app bundle Decant runs from, on macOS.
+const macBundle = () => path.resolve(process.execPath, '..', '..', '..');
+
+// macOS: Decant can replace itself only where it may write, and not from the
+// disk image or a quarantined copy that macOS moved aside ("App Translocation").
+function canReplaceSelf() {
+  if (process.platform !== 'darwin') return true;
+  const bundle = macBundle();
+  if (!bundle.endsWith('.app') || bundle.startsWith('/Volumes/') || bundle.includes('/AppTranslocation/')) return false;
+  try {
+    fs.accessSync(path.dirname(bundle), fs.constants.W_OK);
+    fs.accessSync(bundle, fs.constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function updateSystem() {
+  const kind = updates.updateKind({
+    platform: process.platform,
+    packaged: app.isPackaged,
+    portable: Boolean(process.env.PORTABLE_EXECUTABLE_FILE),
+    appImage: Boolean(process.env.APPIMAGE),
+    canReplace: canReplaceSelf(),
+  });
+  return { kind, arch: process.arch };
+}
+
+function setUpdate(patch) {
+  update = { ...update, ...patch };
+  send('update:state', update);
+}
+
+async function checkForUpdate() {
+  const found = await updates.check({ current: app.getVersion(), fetch: net.fetch, system: updateSystem() });
+  if (!found) return null;
+  // Already known (maybe downloading): left as it is.
+  if (update?.version !== found.version) update = { ...found, status: 'available', percent: 0, file: null, error: null };
+  send('update:state', update);
+  return update;
+}
+
+function autoCheckForUpdate() {
+  if (settings.get().checkUpdates === false) return;
+  checkForUpdate().catch((err) => console.warn('[decant] could not check for updates:', err.message));
+}
+
+const updateDir = () => path.join(app.getPath('temp'), 'decant-update');
+
+async function fetchTo(url, file, expected) {
+  const res = await net.fetch(url);
+  if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+  const total = Number(res.headers.get('content-length')) || expected || 0;
+  const out = fs.createWriteStream(file);
+  try {
+    const reader = res.body.getReader();
+    let received = 0;
+    let shown = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!out.write(value)) await new Promise((resolve) => out.once('drain', resolve));
+      received += value.length;
+      const percent = total ? Math.min(99, Math.floor((received / total) * 100)) : 0;
+      if (percent !== shown) setUpdate({ percent: (shown = percent) });
+    }
+    await new Promise((resolve, reject) => out.end((err) => (err ? reject(err) : resolve())));
+    if (total && received !== total) throw new Error(t('The download was cut off.'));
+  } catch (err) {
+    out.destroy();
+    throw err;
+  }
+}
+
+function execFileAsync(cmd, args) {
+  return new Promise((resolve, reject) => execFile(cmd, args, (err, stdout) => (err ? reject(err) : resolve(stdout))));
+}
+
+// Downloads the new version and gets it ready to be put in place.
+async function downloadUpdate() {
+  if (!update) return null;
+  if (update.kind === 'manual' || !update.asset) {
+    shell.openExternal(update.page);
+    return update;
+  }
+  if (update.status === 'downloading' || update.status === 'ready') return update;
+  setUpdate({ status: 'downloading', percent: 0, error: null });
+  const dir = updateDir();
+  try {
+    await fs.promises.rm(dir, { recursive: true, force: true });
+    await fs.promises.mkdir(dir, { recursive: true });
+    const file = path.join(dir, update.asset.name);
+    await fetchTo(update.asset.url, file, update.asset.size);
+    let ready = file;
+    if (update.kind === 'mac-zip') {
+      // ditto keeps the app's signature and symlinks intact.
+      const out = path.join(dir, 'app');
+      await execFileAsync('/usr/bin/ditto', ['-x', '-k', file, out]);
+      const name = (await fs.promises.readdir(out)).find((n) => n.endsWith('.app'));
+      if (!name) throw new Error(t('The download is not a Decant app.'));
+      ready = path.join(out, name);
+      await execFileAsync('/usr/bin/xattr', ['-dr', 'com.apple.quarantine', ready]).catch(() => {});
+    } else if (process.platform !== 'win32') {
+      await fs.promises.chmod(file, 0o755);
+    }
+    setUpdate({ status: 'ready', percent: 100, file: ready });
+  } catch (err) {
+    fs.promises.rm(dir, { recursive: true, force: true }).catch(() => {});
+    setUpdate({ status: 'error', error: err.message });
+  }
+  return update;
+}
+
+// Keeps running once Decant has quit.
+function runDetached(cmd, args) {
+  const child = spawn(cmd, args, { detached: true, stdio: 'ignore', windowsHide: true });
+  child.unref();
+}
+
+// Waits for Decant to quit, puts the new version in place and opens it. The
+// old version stays if the new one cannot be moved in.
+const MAC_SWAP = `
+pid="$1"; new="$2"; app="$3"; dir="$4"
+while kill -0 "$pid" 2>/dev/null; do sleep 0.3; done
+old="$app.old-$$"
+if mv "$app" "$old"; then
+  if mv "$new" "$app"; then rm -rf "$old"; else mv "$old" "$app"; fi
+fi
+rm -rf "$dir"
+open "$app"
+`;
+
+const WIN_SWAP = [
+  '@echo off',
+  'set tries=0',
+  ':retry',
+  'timeout /t 1 /nobreak >nul',
+  'set /a tries+=1',
+  'move /y "%~1" "%~2" >nul 2>&1 && goto done',
+  'if %tries% lss 30 goto retry',
+  ':done',
+  'start "" "%~2"',
+  '(goto) 2>nul & del "%~f0"',
+  '',
+].join('\r\n');
+
+// Puts the downloaded version in place and restarts Decant.
+async function installUpdate() {
+  if (update?.status !== 'ready' || !fs.existsSync(update.file)) return false;
+  const { kind, file } = update;
+  if (kind === 'mac-zip') {
+    runDetached('/bin/sh', ['-c', MAC_SWAP, 'sh', String(process.pid), file, macBundle(), updateDir()]);
+  } else if (kind === 'win-setup') {
+    // The installer replaces the app where it is installed, then opens it.
+    runDetached(file, ['/S', '--updated', '--force-run']);
+  } else if (kind === 'win-portable') {
+    const script = path.join(updateDir(), 'swap.cmd');
+    await fs.promises.writeFile(script, WIN_SWAP);
+    runDetached('cmd.exe', ['/d', '/c', script, file, process.env.PORTABLE_EXECUTABLE_FILE]);
+  } else if (kind === 'appimage') {
+    // Linux lets a running file be replaced.
+    const target = process.env.APPIMAGE;
+    await fs.promises.copyFile(file, `${target}.new`);
+    await fs.promises.chmod(`${target}.new`, 0o755);
+    await fs.promises.rename(`${target}.new`, target);
+    app.relaunch({ execPath: target, args: [] });
+  } else if (kind === 'deb') {
+    try {
+      // Asks for the password in a system window.
+      await execFileAsync('pkexec', ['dpkg', '-i', file]);
+    } catch (err) {
+      setUpdate({ status: 'error', error: err.code === 'ENOENT' ? t('pkexec is missing: install the .deb yourself.') : t('The update was not installed.') });
+      return false;
+    }
+    app.relaunch();
+  } else {
+    return false;
+  }
+  setTimeout(() => app.quit(), 300);
+  return true;
+}
+
+// --- The browser extension ------------------------------------------------------
+// Kept in Decant's data folder and refreshed at launch when this version of
+// Decant ships a different one: the browser loads it from there.
+
+const extensionFolder = () => path.join(app.getPath('userData'), extension.FOLDER_NAME);
+const extensionSource = () => (app.isPackaged ? path.join(process.resourcesPath, 'extension') : path.join(__dirname, '..', '..', 'extension'));
+let extensionState = { error: null };
+
+function syncExtension() {
+  try {
+    extension.sync({ source: extensionSource(), target: extensionFolder(), version: app.getVersion() });
+    extensionState = { error: null };
+  } catch (err) {
+    extensionState = { error: err.message };
+    console.warn('[decant] could not refresh the browser extension:', err.message);
+  }
 }
 
 function focusWindow() {
@@ -607,6 +827,7 @@ app.whenReady().then(() => {
   if (!singleInstance) return;
   i18n.setLanguage(settings.get().language, app.getLocale());
   library.prune();
+  syncExtension();
   runCleanup();
   setInterval(runCleanup, 60 * 60 * 1000);
   protocol.handle('decant-media', serveLibrary);
@@ -617,6 +838,8 @@ app.whenReady().then(() => {
   // A link opened on macOS right as Decant started may have opened it already.
   if (!win) createWindow();
   autoUpdateEngine();
+  setTimeout(autoCheckForUpdate, 5000);
+  setInterval(autoCheckForUpdate, DAY);
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
