@@ -688,10 +688,14 @@ const trashedItems = () => state.library.filter((i) => i.trashedAt && !withTrash
 const trashedPlaylists = () => state.playlists.filter((p) => p.trashedAt);
 const trashCount = () => trashedItems().length + trashedPlaylists().length;
 
-// "Deleted in 6 days", "Deleted in 5 hours", "Deleted soon"
-function deleteIn(trashedAt) {
-  const days = CLEANUP_DELAYS.includes(state.settings.cleanupDelayDays) ? state.settings.cleanupDelayDays : 7;
-  const left = trashedAt + days * DAY - Date.now();
+const REMOVED_DAYS = 30;
+const cleanupDays = () => (CLEANUP_DELAYS.includes(state.settings.cleanupDelayDays) ? state.settings.cleanupDelayDays : 7);
+
+// "Deleted in 6 days", "Deleted in 5 hours", "Deleted soon". What you removed
+// yourself waits REMOVED_DAYS (see cleanup.js).
+function deleteIn(entry) {
+  const days = entry.removed ? REMOVED_DAYS : cleanupDays();
+  const left = entry.trashedAt + days * DAY - Date.now();
   if (left <= 60 * 60 * 1000) return t('Deleted soon');
   if (left < DAY) return t('Deleted in {n} hours', { n: Math.ceil(left / (60 * 60 * 1000)) });
   return t('Deleted in {n} days', { n: Math.ceil(left / DAY) });
@@ -707,7 +711,7 @@ async function deleteFromTrash(what, count) {
   applyLibrary(await api.library.deleteNow(what));
 }
 
-// Tells when videos move to "To delete" by themselves, with a way back.
+// Tells when videos move to "To delete" (by themselves, or removed), with a way back.
 function announceTrash(before) {
   const fresh = [
     ...trashedItems().filter((i) => !before.has(`i${i.id}`)).map((i) => ({ items: [i.id], title: i.title })),
@@ -716,8 +720,12 @@ function announceTrash(before) {
   if (!fresh.length) return;
   const what = { items: fresh.flatMap((f) => f.items || []), playlists: fresh.flatMap((f) => f.playlists || []) };
   const [one] = fresh;
-  const text =
-    fresh.length > 1
+  const byHand = fresh.every((f) => f.items?.every((id) => state.library.find((i) => i.id === id)?.removed));
+  const text = byHand
+    ? fresh.length > 1
+      ? t('{n} items removed.', { n: fresh.length })
+      : t('“{title}” removed.', { title: one.title })
+    : fresh.length > 1
       ? t('{n} items moved to “To delete”.', { n: fresh.length })
       : one.playlist
         ? t('Playlist “{title}” watched: moved to “To delete”.', { title: one.title })
@@ -821,7 +829,7 @@ function renderTile(item) {
         { class: 'tile-text' },
         h('div', { class: 'tile-title' }, item.title),
         h('div', { class: 'row-sub' }, h('span', { class: 'tag' }, item.kind === 'audio' ? t('Audio') : t('Video')), item.uploader ? h('span', {}, item.uploader) : null),
-        item.trashedAt ? h('div', { class: 'tile-countdown' }, deleteIn(item.trashedAt)) : null,
+        item.trashedAt ? h('div', { class: 'tile-countdown' }, deleteIn(item)) : null,
       ),
       h('div', { class: 'tile-actions' }, moreButton(tileMenu(item))),
     ),
@@ -829,8 +837,8 @@ function renderTile(item) {
 }
 
 function tileMenu(item) {
+  // Goes to "Recently deleted", with Undo in the toast.
   const remove = async () => {
-    if (!(await withDialog(() => confirm(t('Remove “{title}” from your library? The file will be deleted.', { title: item.title }))))) return;
     if (player?.item.id === item.id) stopPlayer();
     applyLibrary(await api.library.remove(item.id));
   };
@@ -838,8 +846,8 @@ function tileMenu(item) {
   if (item.trashedAt) {
     return [
       { label: t('Restore'), icon: 'restore', onclick: () => restoreFromTrash({ items: [item.id] }) },
-      { label: t('Always keep'), icon: 'pin', onclick: () => keep(true) },
-      { label: t('Delete now'), icon: 'trash', danger: true, onclick: remove },
+      item.removed ? null : { label: t('Always keep'), icon: 'pin', onclick: () => keep(true) },
+      { label: t('Delete now'), icon: 'trash', danger: true, onclick: () => deleteFromTrash({ items: [item.id] }, 1) },
     ];
   }
   return [
@@ -901,14 +909,17 @@ function renderSelectionBar() {
         class: 'btn small danger',
         disabled: !ids.length,
         onclick: async () => {
-          if (!(await withDialog(() => confirm(t('Remove {n} items from your library? Their files will be deleted.', { n: ids.length }))))) return;
+          if (state.libraryFilter === 'trash') {
+            state.selection = null;
+            return deleteFromTrash({ items: ids }, ids.length);
+          }
           if (player && ids.includes(player.item.id)) stopPlayer();
           state.selection = null;
           applyLibrary(await api.library.remove(ids));
         },
       },
       icon('trash'),
-      t('Remove'),
+      state.libraryFilter === 'trash' ? t('Delete now') : t('Remove'),
     ),
     h('button', { class: 'btn small', onclick: stopSelecting }, t('Done')),
   );
@@ -932,7 +943,7 @@ function renderLibrary() {
         ['video', t('Videos')],
         ['audio', t('Audio')],
         ['playlists', livePlaylists().length ? `${t('Playlists')} ${livePlaylists().length}` : t('Playlists')],
-        ...(state.settings.autoCleanup || inTrash ? [['trash', inTrash ? `${t('To delete')} ${inTrash}` : t('To delete')]] : []),
+        ...(state.settings.autoCleanup || inTrash ? [['trash', inTrash ? `${trashLabel()} ${inTrash}` : trashLabel()]] : []),
       ],
       state.libraryFilter,
       (filter) => {
@@ -989,6 +1000,8 @@ function applyLibrary({ items, playlists }) {
 }
 
 const livePlaylists = () => state.playlists.filter((p) => !p.trashedAt);
+// With auto cleanup off, only what you removed yourself is there.
+const trashLabel = () => (state.settings.autoCleanup ? t('To delete') : t('Recently deleted'));
 
 // Above "To delete": what happens here, and everything at once.
 function renderTrashBar(show) {
@@ -996,10 +1009,12 @@ function renderTrashBar(show) {
   const count = trashCount();
   bar.hidden = !show || !count || Boolean(state.selection);
   if (bar.hidden) return bar.replaceChildren();
-  const days = CLEANUP_DELAYS.includes(state.settings.cleanupDelayDays) ? state.settings.cleanupDelayDays : 7;
+  const days = cleanupDays();
+  const watched = days ? t('Watched videos wait here {n} days, then are deleted.', { n: days }) : t('Watched videos are deleted as soon as you leave them.');
+  const removed = t('What you remove waits here {n} days, then is deleted.', { n: REMOVED_DAYS });
   const everything = () => ({ items: trashedItems().map((i) => i.id), playlists: trashedPlaylists().map((p) => p.id) });
   bar.replaceChildren(
-    h('span', { class: 'hint' }, days ? t('Watched videos wait here {n} days, then are deleted.', { n: days }) : t('Watched videos are deleted as soon as you leave them.')),
+    h('span', { class: 'hint' }, state.settings.autoCleanup ? `${watched} ${removed}` : removed),
     h('span', { class: 'spacer' }),
     h('button', { class: 'btn small', onclick: () => restoreFromTrash(everything()) }, icon('restore'), t('Restore all')),
     h('button', { class: 'btn small danger', onclick: () => deleteFromTrash(everything(), count) }, icon('trash'), t('Delete all now')),
@@ -1009,8 +1024,9 @@ function renderTrashBar(show) {
 // --- Library: playlists ---
 
 // The playlist's items that are in the library (some may still be downloading).
+// What you removed yourself is left out until restored.
 function playlistItems(playlist) {
-  return playlist.entries.map((e) => state.library.find((i) => i.id === e.id)).filter(Boolean);
+  return playlist.entries.map((e) => state.library.find((i) => i.id === e.id)).filter((i) => i && !i.removed);
 }
 
 function playlistCover(playlist) {
@@ -1054,7 +1070,7 @@ function renderPlaylistTile(playlist) {
         { class: 'tile-text' },
         h('div', { class: 'tile-title' }, playlist.title),
         h('div', { class: 'row-sub' }, h('span', { class: 'tag' }, t('Playlist')), playlist.uploader ? h('span', {}, playlist.uploader) : null),
-        playlist.trashedAt ? h('div', { class: 'tile-countdown' }, deleteIn(playlist.trashedAt)) : null,
+        playlist.trashedAt ? h('div', { class: 'tile-countdown' }, deleteIn(playlist)) : null,
       ),
       playlist.trashedAt
         ? h(
@@ -1073,7 +1089,7 @@ function renderPlaylistTile(playlist) {
 function renderPlaylistView(playlist) {
   const query = state.librarySearch.trim().toLowerCase();
   const items = playlistItems(playlist);
-  const pending = playlist.entries.length - items.length;
+  const pending = playlist.entries.filter((e) => !state.library.some((i) => i.id === e.id)).length;
   const total = items.reduce((sum, i) => sum + (i.duration || 0), 0);
   const meta = [
     playlist.uploader,
@@ -1148,7 +1164,7 @@ function renderPlaylistView(playlist) {
       icon('back'),
       state.libraryFilter === 'trash' ? t('To delete') : t('Playlists'),
     ),
-    playlist.trashedAt ? h('p', { class: 'hint' }, deleteIn(playlist.trashedAt)) : null,
+    playlist.trashedAt ? h('p', { class: 'hint' }, deleteIn(playlist)) : null,
     head,
     h('ol', { class: 'rows playlist-rows' }, rows),
   ];

@@ -269,6 +269,7 @@ function registerIpc() {
     const target = playlist ? library.savePlaylist(playlist) : null;
     const fresh = [];
     let existing = 0;
+    let restored = false;
     for (const spec of specs) {
       if (!spec.library) {
         fresh.push({ ...spec, outputDir: outputDir() });
@@ -276,7 +277,14 @@ function registerIpc() {
       }
       // Already in the library, or on its way there: no second download.
       const job = queue.list().find((j) => j.library && !['error', 'canceled'].includes(j.status) && sameMedia(j, spec));
-      const libraryId = library.find(spec)?.id || job?.libraryId;
+      const found = library.find(spec);
+      // Saved again while in "To delete": back in the library.
+      if (found?.trashedAt) {
+        const { items, playlists } = library.snapshot();
+        library.replace({ items: items.map((i) => (i.id === found.id ? cleanup.restoreItem(i) : i)), playlists });
+        restored = true;
+      }
+      const libraryId = found?.id || job?.libraryId;
       if (libraryId) {
         existing++;
         if (target) library.addToPlaylist(target.id, libraryId, spec.playlistIndex ?? 0);
@@ -287,7 +295,7 @@ function registerIpc() {
       fresh.push({ ...spec, libraryId: id, outputDir: library.dir(id), subtitles: subtitleLanguages() });
     }
     if (fresh.length) queue.add(fresh);
-    if (target) send('library:update', library.snapshot());
+    if (target || restored) send('library:update', library.snapshot());
     return { added: fresh.length, existing, playlistId: target?.id || null };
   });
   ipcMain.handle('queue:cancel', (_e, id) => queue.cancel(id));
@@ -306,8 +314,11 @@ function registerIpc() {
   });
 
   ipcMain.handle('library:list', () => library.snapshot());
+  // Removed by hand: waits in "Recently deleted" before it is deleted.
   ipcMain.handle('library:remove', (_e, ids) => {
-    for (const id of [ids].flat()) library.remove(id);
+    const gone = new Set([ids].flat());
+    const { items, playlists } = library.snapshot();
+    library.replace({ items: items.map((i) => (gone.has(i.id) ? cleanup.removeItem(i, Date.now()) : i)), playlists });
     return library.snapshot();
   });
   ipcMain.handle('library:removeFromPlaylist', (_e, playlistId, id) => {

@@ -115,14 +115,6 @@ const library = {
   update(id, patch) {
     libraryFile.set({ items: libraryFile.get().items.map((i) => (i.id === id ? { ...i, ...patch } : i)) });
   },
-  remove(id) {
-    const { items, playlists } = libraryFile.get();
-    libraryFile.set({
-      items: items.filter((i) => i.id !== id),
-      playlists: playlists.map((p) => ({ ...p, entries: p.entries.filter((e) => e.id !== id) })),
-    });
-    fs.rm(library.dir(id), { recursive: true, force: true }, () => {});
-  },
   // The playlist saved from this source (same key), created if new.
   savePlaylist({ key, title, uploader, url, thumbnail }) {
     const playlists = libraryFile.get().playlists;

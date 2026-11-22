@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { DAY, isFinished, sweep, restoreItem } = require('../src/main/cleanup');
+const { DAY, REMOVED_DAYS, isFinished, sweep, removeItem, restoreItem } = require('../src/main/cleanup');
 
 const on = { autoCleanup: true, cleanupDelayDays: 7, cleanupAudio: false };
 const video = (id, extra = {}) => ({ id, kind: 'video', title: id, ...extra });
@@ -77,5 +77,33 @@ test('a restored video starts over and does not come straight back', () => {
   const r = sweep({ items: [video('a', { finishedAt: T, position: 590 })], playlists: [] }, on, T);
   const back = restoreItem(r.items[0]);
   assert.deepEqual(back, { id: 'a', kind: 'video', title: 'a', position: 0 });
+  assert.equal(sweep({ items: [back], playlists: [] }, on, T + 1).items[0].trashedAt, undefined);
+});
+
+test('what you remove waits 30 days in "Recently deleted", even with auto cleanup off', () => {
+  const off = { ...on, autoCleanup: false };
+  const items = [removeItem(video('a', { position: 120 }), T), video('b')];
+  let r = sweep({ items, playlists: [] }, off, T + 1);
+  assert.equal(r.items[0].trashedAt, T, 'not brought back when cleanup is off');
+  r = sweep(r, off, T + REMOVED_DAYS * DAY - 1);
+  assert.deepEqual(r.deleted, []);
+  r = sweep(r, off, T + REMOVED_DAYS * DAY);
+  assert.deepEqual(r.deleted, ['a']);
+  assert.deepEqual(ids(r.items), ['b']);
+});
+
+test('with auto cleanup on, removed items keep their own 30-day delay and the playlist drops them', () => {
+  const items = [removeItem(video('a'), T), video('b')];
+  let r = sweep({ items, playlists: [list('p', 'a', 'b')] }, { ...on, cleanupDelayDays: 1 }, T + 2 * DAY);
+  assert.deepEqual(r.deleted, [], 'not on the cleanup delay');
+  assert.equal(r.items[0].trashedAt, T, 'unwatched but stays removed');
+  r = sweep(r, on, T + REMOVED_DAYS * DAY);
+  assert.deepEqual(r.deleted, ['a']);
+  assert.deepEqual(r.playlists[0].entries.map((e) => e.id), ['b']);
+});
+
+test('a removed item comes back where you were, and does not go straight to "To delete"', () => {
+  const back = restoreItem(removeItem(video('a', { position: 120, finishedAt: T }), T));
+  assert.deepEqual(back, video('a', { position: 120 }));
   assert.equal(sweep({ items: [back], playlists: [] }, on, T + 1).items[0].trashedAt, undefined);
 });
