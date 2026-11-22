@@ -160,16 +160,27 @@
     history: { list: async () => history, remove: async () => history, clear: async () => [], onUpdate: listen },
     library: {
       list: async () => shelf,
-      remove: async () => ({ items: [], playlists: [] }),
+      // Removed items wait in "Recently deleted", as in the app.
+      remove: async (ids) => {
+        const gone = [ids].flat();
+        shelf.items = shelf.items.map((i) => (gone.includes(i.id) ? { ...i, trashedAt: Date.now(), removed: true } : i));
+        return { ...shelf };
+      },
       removeFromPlaylist: async () => ({ items: [], playlists: [] }),
       removePlaylist: async () => ({ items: [], playlists: [] }),
       progress: noop,
       export: noop,
       refresh: async () => null,
       playing: noop,
-      restore: async () => shelf,
+      restore: async ({ items = [] } = {}) => {
+        shelf.items = shelf.items.map((i) => (items.includes(i.id) ? (({ trashedAt, trashedWith, removed, ...rest }) => rest)(i) : i));
+        return { ...shelf };
+      },
       keep: async () => shelf,
-      deleteNow: async () => shelf,
+      deleteNow: async ({ items = [] } = {}) => {
+        shelf.items = shelf.items.filter((i) => !items.includes(i.id));
+        return { ...shelf };
+      },
       onUpdate: listen,
     },
     file: { exists: async (f) => Boolean(f), reveal: noop, open: noop },
@@ -179,6 +190,15 @@
     links: { ready: async () => [], onIncoming: listen },
     readClipboard: async () =>
       scene === 'history' ? '' : scene === 'playlist' ? 'https://www.youtube.com/playlist?list=demo' : 'https://www.youtube.com/watch?v=demo',
+    updates: {
+      get: async () => ({ current: '1.3.0', update: null }),
+      check: async () => ({ current: '1.3.0', update: null }),
+      download: noop,
+      install: noop,
+      openPage: noop,
+      onState: listen,
+    },
+    extension: { info: async () => ({ folder: '~/Library/Application Support/Decant/Extension', error: null }), reveal: noop, copyPath: noop },
     engine: { version: async () => '2026.10.22', update: async () => '2026.10.22', onVersion: listen },
   };
 
