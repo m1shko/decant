@@ -3,6 +3,7 @@ const { app } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { jsonFile: jsonFileAt } = require('./jsonfile');
 
 // The app used to be called Siphon: carry its settings and history over.
 const oldDir = path.join(app.getPath('appData'), 'Siphon');
@@ -12,40 +13,8 @@ if (!fs.existsSync(app.getPath('userData')) && fs.existsSync(oldDir)) {
   } catch {}
 }
 
-function jsonFile(name, fallback) {
-  const file = path.join(app.getPath('userData'), name);
-  let data;
-  try {
-    data = { ...fallback, ...JSON.parse(fs.readFileSync(file, 'utf8')) };
-  } catch {
-    data = { ...fallback };
-  }
-  let timer = null;
-  const write = () => {
-    timer = null;
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify(data, null, 2));
-  };
-  const save = () => {
-    clearTimeout(timer);
-    timer = setTimeout(write, 200);
-  };
-  return {
-    get: () => data,
-    set(patch) {
-      Object.assign(data, patch);
-      save();
-      return data;
-    },
-    // Writes a pending change now (the app is about to quit).
-    flush() {
-      if (timer) {
-        clearTimeout(timer);
-        write();
-      }
-    },
-  };
-}
+// Each file is written atomically with a backup copy (see jsonfile.js).
+const jsonFile = (name, fallback) => jsonFileAt(path.join(app.getPath('userData'), name), fallback);
 
 const settings = jsonFile('settings.json', {
   outputDir: null,
@@ -167,4 +136,11 @@ const library = {
   flush: () => libraryFile.flush(),
 };
 
-module.exports = { settings, history, library, sameMedia };
+// Writes every pending change now (the app is about to quit).
+function flushAll() {
+  settings.flush();
+  historyFile.flush();
+  libraryFile.flush();
+}
+
+module.exports = { settings, history, library, sameMedia, flushAll };

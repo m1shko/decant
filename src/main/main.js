@@ -7,7 +7,7 @@ const { execFile, spawn } = require('node:child_process');
 const { Readable } = require('node:stream');
 const ytdlp = require('./ytdlp');
 const binaries = require('./binaries');
-const { settings, history, library, sameMedia } = require('./store');
+const { settings, history, library, sameMedia, flushAll } = require('./store');
 const i18n = require('../renderer/i18n.js');
 const { t } = i18n;
 const { Queue } = require('./queue');
@@ -856,7 +856,7 @@ app.whenReady().then(() => {
   });
 });
 
-app.on('will-quit', () => library.flush());
+app.on('will-quit', flushAll);
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
