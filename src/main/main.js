@@ -536,8 +536,16 @@ async function downloadUpdate() {
   try {
     await fs.promises.rm(dir, { recursive: true, force: true });
     await fs.promises.mkdir(dir, { recursive: true });
+    // The release's checksums come first: no checksum, no download.
+    if (!update.checksums) throw new Error(t('This update has no checksum, so it was not installed.'));
+    const sums = await net.fetch(update.checksums);
+    if (!sums.ok) throw new Error(`HTTP ${sums.status}`);
+    const checksums = await sums.text();
     const file = path.join(dir, update.asset.name);
     await fetchTo(update.asset.url, file, update.asset.size);
+    const verdict = await updates.verifyDownload({ file, name: update.asset.name, checksums });
+    if (verdict === 'missing') throw new Error(t('This update has no checksum, so it was not installed.'));
+    if (verdict !== 'ok') throw new Error(t('The download does not match its checksum, so it was not installed.'));
     let ready = file;
     if (update.kind === 'mac-zip') {
       // ditto keeps the app's signature and symlinks intact.

@@ -63,12 +63,29 @@ jobs:
             dist/*.AppImage
           if-no-files-found: error
 
-      - if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+  # Once every system is built: the files of all three, plus SHA256SUMS.txt,
+  # which the app checks each update against before installing it.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
         with:
-          files: |
-            dist/*.dmg
-            dist/*.zip
-            dist/*.exe
-            dist/*.deb
-            dist/*.AppImage
+          pattern: decant-*
+          path: release
+          merge-multiple: true
+
+      # GitHub turns spaces in file names into dots: the sums use the names
+      # the release will show.
+      - working-directory: release
+        run: |
+          shopt -s nullglob
+          for f in *' '*; do mv -- "$f" "${f// /.}"; done
+          sha256sum -- * > ../SHA256SUMS.txt
+          mv ../SHA256SUMS.txt .
+          cat SHA256SUMS.txt
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release/*

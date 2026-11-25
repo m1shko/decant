@@ -1,6 +1,12 @@
 // New versions of Decant: asks GitHub for the latest release and picks the
 // file this copy of Decant can update itself from. Installing is in main.js.
+const fs = require('node:fs');
+const crypto = require('node:crypto');
+
 const RELEASES_API = 'https://api.github.com/repos/m1shko/decant/releases/latest';
+// Published with every release by the Build workflow: one "<sha256>  <file>"
+// line per file. A download must match its line before it is installed.
+const CHECKSUMS = 'SHA256SUMS.txt';
 
 // "1.10.0" > "1.9.2"; a leading "v" and pre-release suffixes are ignored.
 function parseVersion(v) {
@@ -59,6 +65,35 @@ function pickAsset(assets = [], kind, arch) {
   }
 }
 
+// "<sha256>  <name>" lines (sha256sum's format, "*" for binary mode too) as
+// a Map of name -> lowercase hash. Other lines are ignored.
+function parseChecksums(text) {
+  const sums = new Map();
+  for (const line of String(text || '').split(/\r?\n/)) {
+    const m = /^([0-9a-f]{64}) [ *](.+)$/i.exec(line.trim());
+    if (m) sums.set(m[2].trim(), m[1].toLowerCase());
+  }
+  return sums;
+}
+
+function sha256File(file) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    fs.createReadStream(file)
+      .on('error', reject)
+      .on('data', (chunk) => hash.update(chunk))
+      .on('end', () => resolve(hash.digest('hex')));
+  });
+}
+
+// 'ok' when `file` matches the line for `name` in the checksums text,
+// 'missing' when there is no such line, 'mismatch' when the hash differs.
+async function verifyDownload({ file, name, checksums }) {
+  const expected = parseChecksums(checksums).get(name);
+  if (!expected) return 'missing';
+  return (await sha256File(file)) === expected ? 'ok' : 'mismatch';
+}
+
 // The latest release, or null when it is not newer than `current`.
 // `system`: { arch, kind } — see updateKind.
 async function check({ current, fetch, system }) {
@@ -67,14 +102,18 @@ async function check({ current, fetch, system }) {
   const release = await res.json();
   const version = String(release.tag_name || '').replace(/^v/i, '');
   if (!version || release.draft || release.prerelease || !isNewer(version, current)) return null;
-  const asset = pickAsset(release.assets, system.kind, system.arch);
+  // Without a checksums file the download cannot be checked: the release
+  // page opens instead, as for a system Decant cannot update itself on.
+  const sums = (release.assets || []).find((a) => a.name === CHECKSUMS) || null;
+  const asset = sums ? pickAsset(release.assets, system.kind, system.arch) : null;
   return {
     version,
     page: release.html_url,
     notes: release.body || '',
     kind: asset ? system.kind : 'manual',
     asset: asset ? { name: asset.name, url: asset.browser_download_url, size: asset.size || 0 } : null,
+    checksums: asset ? sums.browser_download_url : null,
   };
 }
 
-module.exports = { RELEASES_API, isNewer, updateKind, pickAsset, check };
+module.exports = { RELEASES_API, CHECKSUMS, isNewer, updateKind, pickAsset, parseChecksums, sha256File, verifyDownload, check };
